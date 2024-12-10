@@ -25,7 +25,6 @@ public partial class MainWindow : Window {
       if (mCommitID is null) return InvalidCommitID;
       Collection<PSObject> results;
       string branchName = $"changesUpto.{mCommitID}";
-      Regex match = new Regex ($"/({mCommitID})/((HEAD -> (s*){mMain}, {branchName}))/");
       mFilesOnBranch.Clear ();
       mFilesOnMain.Clear ();
       using (PowerShell powershell = PowerShell.Create ()) {
@@ -44,16 +43,13 @@ public partial class MainWindow : Window {
          results = powershell.Invoke ();
          if (results.Count is not 0) {
             powershell.AddScript ($"git branch -D {branchName}; git checkout -b {branchName} {mCommitID}");
-            //powershell.AddScript ($"git checkout -b {branchName} {mCommitID}");
          }
          powershell.AddScript ($"git checkout {branchName}");
          results = powershell.Invoke ();
          // diff highlights changes made AFTER selected commit ID
          // Left side: main (most recent version of repository)
          // Right side: Changes upto (including) selected commitID
-         //powershell.AddScript ($"git di {mMain}");
-         //results = powershell.Invoke ();
-         powershell.AddScript ($"git st"); // On branch
+         powershell.AddScript ($"git di {mMain}");
          results = powershell.Invoke ();
          GatherFiles (mRep, mFilesOnBranch);
       }
@@ -62,7 +58,7 @@ public partial class MainWindow : Window {
 
    static Error CompareFiles () {
       if (mOutFile is null) return OutFileNotFound;
-      var list = mFilesOnMain.Concat (mFilesOnBranch).Select (a => a.Key);
+      var list = mFilesOnMain.Concat (mFilesOnBranch).Select (a => a.Key).Distinct ();
       // Branch will always be BEHIND main
       // If the branch has extra files: files were deleted in later commits
       // If main has extra files: new files were added in subsequent commits
@@ -87,7 +83,7 @@ public partial class MainWindow : Window {
             }
             for (int i = mainLen; i < branchLen; i++) AddChange ($"- {branchContent[i]}", i + 1);
          }
-         if (changes.Count != index) AddFile (file, index);
+         if (changes.Count != index) { AddFile (file, index); mTreeViewItems.Add (file); }
       }
       if (changes.Count != 0) { WriteToFile (mOutFile, changes); return OK; }
       return NoChangesMadeAfterCommit;
@@ -107,16 +103,18 @@ public partial class MainWindow : Window {
 
 
    static void GatherFiles (string rep, Dictionary<string, string[]> fileList) {
-      foreach (var folder in Directory.GetDirectories (rep).Where (a => !a.EndsWith (".git"))) {
-         GatherFiles (folder, fileList);
-         AddFiles (folder, fileList);
-      }
       AddFiles (rep, fileList);
 
       // HELPER
       static void AddFiles (string folder, Dictionary<string, string[]> fileList) {
-         var gatheredFiles = Directory.GetFiles (folder, "*.adoc");
-         foreach (var file in gatheredFiles.Except (["Changes.txt"])) {
+         DirectoryInfo directoryInfo = new (folder);
+         var gatheredFiles = directoryInfo.EnumerateFiles ("*.*", SearchOption.AllDirectories)
+                                    .Where (f => f.Extension.Equals (".adoc", StringComparison.OrdinalIgnoreCase) ||
+                                                f.Extension.Equals (".md", StringComparison.OrdinalIgnoreCase) ||
+                                                f.Extension.Equals (".txt", StringComparison.OrdinalIgnoreCase))
+                                    .Select (f => f.FullName)
+                                    .ToArray ();
+         foreach (var file in gatheredFiles) {
             if (fileList.TryGetValue (file, out var _))
                fileList[file] = File.ReadAllLines ($"{file}");
             else fileList.TryAdd (file, File.ReadAllLines (file));
@@ -150,7 +148,7 @@ public partial class MainWindow : Window {
          string folderPath = fd.FolderName;
          mSelectedRep.Content = folderPath;
          mRep = folderPath.ToString ();
-         mOutFile = $"{mRep}/Changes.txt";
+         mOutFile = $"{mRep}html/Changes.txt";
 
          using (PowerShell powershell = PowerShell.Create ()) {
             powershell.AddScript ($"cd {(Path.GetPathRoot (mRep) ?? "C:\\").Replace ("\\", "")}");
@@ -175,8 +173,9 @@ public partial class MainWindow : Window {
       if ((error = RunShellScript ()) != OK) { UpdateDoc (error); return; }
       error = CompareFiles ();
       UpdateDoc (error);
-      mFileTree.ItemsSource = mFilesOnMain.Select (a => a.Key.Split (mSeparator).LastOrDefault ());
+      mFileTree.ItemsSource = mTreeViewItems.Select (a => a.Split (mSeparator).LastOrDefault ());
    }
+   static List <string> mTreeViewItems = [];
 
    Error ValidateCommitID () {
       if (mTBCommitID.Text is not string id) return InvalidCommitID;
@@ -185,7 +184,7 @@ public partial class MainWindow : Window {
       return OK;
    }
 
-   void Reset () { mFlowDocLeft.Blocks.Clear (); mFileTree.ItemsSource = null; }
+   void Reset () { mFlowDocLeft.Blocks.Clear (); mFileTree.ItemsSource = null; mTreeViewItems.Clear (); }
 
    void UpdateDoc (Error err) {
       mFlowDocLeft.Blocks.Clear ();

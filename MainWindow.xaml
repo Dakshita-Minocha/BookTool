@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:BookTool"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="MainWindow" Height="450" Width="800" WindowState="Maximized">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="40"/>
@@ -22,9 +22,9 @@
             <TextBox x:Name="mTBCommitID" Width="100" Margin="4"/>
             <Button Content="Load Content" Height="25" Margin="4" Click="OnClickContentLoad"/>
         </StackPanel>
-        <Border Grid.Row="1" BorderBrush="Black" BorderThickness="1">
-            <ScrollViewer Name="mTreeScroll" PreviewMouseWheel="OnMouseWheel" Background="LightGray" VerticalScrollBarVisibility="Hidden">
-                <StackPanel Orientation="Vertical" MinWidth="100" FocusManager.FocusedElement="{Binding ElementName=mSearchBox}">
+        <Border Grid.RowSpan="2" Grid.Row="0" BorderBrush="LightGray" BorderThickness="1">
+            <ScrollViewer Name="mTreeScroll" PreviewMouseWheel="OnMouseWheel" Background="LightGray">
+                <StackPanel Orientation="Vertical" MinWidth="100" FocusManager.FocusedElement="{Binding ElementName=mSearchBox}" Margin="8">
                     <TreeView x:Name="mFileTree" Margin="8" SelectedItemChanged="OnSelectionChanged" BorderBrush="Transparent" Background="LightGray"
                               VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"/>
                     <!-- Setting VirtualizingPanel properties to help improve TreeView performance
@@ -36,7 +36,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition />
             </Grid.ColumnDefinitions>
-            <FlowDocumentScrollViewer Name="mScrollerLeft" Margin="8" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden">
+            <FlowDocumentScrollViewer Name="mScrollerLeft" Margin="8" HorizontalScrollBarVisibility="Hidden" BorderBrush="LightGray" BorderThickness="1">
                 <FlowDocument Name="mFlowDocLeft" PagePadding="20" FontFamily="Consolas" FontSize="18"/>
             </FlowDocumentScrollViewer>
         </Grid>
