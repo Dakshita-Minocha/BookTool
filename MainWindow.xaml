@@ -1,0 +1,44 @@
+﻿<Window x:Class="BookTool.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:BookTool"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40"/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition/>
+        </Grid.ColumnDefinitions>
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+            <Button x:Name="mOpen" Content="Select Repository" Height="25" Margin="4" Click="OnOpenClicked"/>
+            <Label x:Name="mSelectedRep" Height="25" Margin="4" Width="150"/>
+            <Label Grid.Column="1" Content="Enter Last Translated Commit:" HorizontalAlignment="Left" Margin="4"/>
+            <TextBox x:Name="mTBCommitID" Width="100" Margin="4"/>
+            <Button Content="Load Content" Height="25" Margin="4" Click="OnClickContentLoad"/>
+        </StackPanel>
+        <Border Grid.Row="1" BorderBrush="Black" BorderThickness="1">
+            <ScrollViewer Name="mTreeScroll" PreviewMouseWheel="OnMouseWheel" Background="LightGray" VerticalScrollBarVisibility="Hidden">
+                <StackPanel Orientation="Vertical" MinWidth="100" FocusManager.FocusedElement="{Binding ElementName=mSearchBox}">
+                    <TreeView x:Name="mFileTree" Margin="8" SelectedItemChanged="OnSelectionChanged" BorderBrush="Transparent" Background="LightGray"
+                              VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"/>
+                    <!-- Setting VirtualizingPanel properties to help improve TreeView performance
+                    See https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/how-to-improve-the-performance-of-a-treeview?view=netframeworkdesktop-4.8-->
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+        <Grid Grid.Row="1" Grid.Column="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <FlowDocumentScrollViewer Name="mScrollerLeft" Margin="8" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden">
+                <FlowDocument Name="mFlowDocLeft" PagePadding="20" FontFamily="Consolas" FontSize="18"/>
+            </FlowDocumentScrollViewer>
+        </Grid>
+    </Grid>
+</Window>
