@@ -20,6 +20,10 @@ public partial class MainWindow : Window {
       mFileTree.ItemsSource = mTreeViewItems;
       mRunHeight = (int)new FormattedText ("9999", CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                         new Typeface (mFlowDoc.FontFamily.ToString ()), mFlowDoc.FontSize, Brushes.Black, null, 1).Height;
+      Loaded += delegate {
+         mScroller = (ScrollViewer)((Decorator)VisualTreeHelper.GetChild (VisualTreeHelper.GetChild (mDocScroller, 0), 0)).Child;
+         //mBtnExport.InputBindings.Add (new CommandBinding (mContentLoaded, (s, e) => mBtnExport.IsEnabled = !IsEnabled));
+      };
    }
    readonly RelayCommand mGTLCommand;
    readonly KeyGesture mGTLGesture = new (Key.G, ModifierKeys.Control);
@@ -30,7 +34,10 @@ public partial class MainWindow : Window {
       var para = new Paragraph ();
       int line = 0;
       if (!mFilesOnMain.TryGetValue (path, out var mainContent)) para.Inlines.Add (new Run ("File Deleted"));
-      else foreach (var item in mainContent) para.Inlines.Add (new Run ($"{++line,4} │ {item}\n"));
+      else foreach (var item in mainContent) {
+            para.Inlines.Add (new Run ($"{++line,4} │ {item}\n"));
+            (mMaxRows, mContentLoaded) = (mainContent.Length, true);
+      }
       mFlowDoc.Blocks.Add (para);
    }
 
@@ -110,12 +117,13 @@ public partial class MainWindow : Window {
          }
          if (mChanges.Count != index) {
             AddFile (file, index);
-            mTreeViewItems.Add (new FileInfo (file)); }
+            mTreeViewItems.Add (new FileInfo (file));
+         }
       }
       return mChanges.Count != 0 ? OK : NoChangesMadeAfterCommit;
 
       // Helper methods -------------------------------------------
-      void AddChange (string change, int line) => mChanges.Add ($"   {line}   {change}\n");
+      void AddChange (string change, int line) => mChanges.Add ($"   {line,4} │   {change}\n");
       void AddChangeOnly (string change) => mChanges.Add ($"   {change}\n");
       void AddFile (string fileName, int insertAt) {
          mChanges.Insert (insertAt, $"{fileName}\n");
@@ -127,13 +135,11 @@ public partial class MainWindow : Window {
 
    static void GatherFiles (string rep, Dictionary<string, string[]> fileList) {
       DirectoryInfo directoryInfo = new (rep);
-      var gatheredFiles = directoryInfo.EnumerateFiles ("*.*", SearchOption.AllDirectories)
+      foreach (var file in directoryInfo.EnumerateFiles ("*.*", SearchOption.AllDirectories)
                                  .Where (f => f.Extension.Equals (".adoc", StringComparison.OrdinalIgnoreCase) ||
-                                             f.Extension.Equals (".md", StringComparison.OrdinalIgnoreCase) ||
-                                             f.Extension.Equals (".txt", StringComparison.OrdinalIgnoreCase))
-                                 .Select (f => f.FullName);
-                                 //.ToArray ();
-      foreach (var file in gatheredFiles) {
+                                              f.Extension.Equals (".md", StringComparison.OrdinalIgnoreCase) ||
+                                              f.Extension.Equals (".txt", StringComparison.OrdinalIgnoreCase))
+                                 .Select (f => f.FullName)) {
          if (fileList.TryGetValue (file, out var _))
             fileList[file] = File.ReadAllLines ($"{file}");
          else fileList.TryAdd (file, File.ReadAllLines (file));
@@ -188,7 +194,6 @@ public partial class MainWindow : Window {
          return OK;
       }
    }
-   static readonly char[] mSeparator = { '\\', '/' };
 
    void OnClickContentLoad (object sender, RoutedEventArgs e) {
       UpdateDoc (Clear);
@@ -200,7 +205,8 @@ public partial class MainWindow : Window {
       if ((error = RunShellScript ()) != OK) { UpdateDoc (error); return; }
       error = CompareFiles ();
       UpdateDoc (error);
-      mFileTree.ItemsSource = mTreeViewItems.Select (a => new TreeViewItem () { Header = a.Name, Tag = a});
+      mFileTree.ItemsSource = mTreeViewItems.Select (a => new TreeViewItem () { Header = a.Name, Tag = a });
+      mBtnExport.IsEnabled = true;
    }
    static List<FileInfo> mTreeViewItems = [];
 
@@ -211,7 +217,7 @@ public partial class MainWindow : Window {
       return OK;
    }
 
-   void Reset () { mFlowDoc.Blocks.Clear (); mFileTree.ItemsSource = null; mTreeViewItems.Clear (); }
+   void Reset () { mFlowDoc.Blocks.Clear (); mFileTree.ItemsSource = null; mTreeViewItems.Clear (); mBtnExport.IsEnabled = false; }
 
    void UpdateDoc (Error err) {
       mFlowDoc.Blocks.Clear ();

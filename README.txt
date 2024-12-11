@@ -17,13 +17,17 @@ BookTool Workflow:
    - Enter the commitID which was last translated.
    - Click on 'Load Content'.
 
+Shortcuts:
+   Press [Ctrl+G] to go to a specific line in document after content has loaded.
+   Press [Ctrl+F] to find occurrences of words.
+
 Output:
    There are two types of outputs:
       1. Diff - opens winmerge with most-recent main on the left and main after entered commitID on the right.
-      2. {folder}html/Changes.txt - Total changes made in a text file saved in selected folder.
+      2. {folder}html/Changes.txt - Saved in corresponding html folder of the repository.
 
    Contents of the Changes.txt file are displayed in the following format:
-   <FilePath to .adoc file where changes were made>
+   <FilePath to text file where changes were made>
       <LineNumber> <+ | - | -+ > <ChangedLine>
    EOF
 
@@ -36,7 +40,6 @@ Output:
 
 Changed files are added to file tree on the left.
 
-NOTE: Do NOT commit Changes.txt. Add it to the global .gitignore if possible.
 
 The changes can also be viewed later by switching to the corresponding branch.
 The branches are named as: changesUpto.{mCommitID}. The branch will always be BEHIND main.
