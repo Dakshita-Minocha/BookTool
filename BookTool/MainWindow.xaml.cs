@@ -1,23 +1,44 @@
 ﻿using Microsoft.Win32;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Management.Automation;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 using static BookTool.MainWindow.Error;
 using Path = System.IO.Path;
-
 namespace BookTool;
-/// <summary>
-/// Interaction logic for MainWindow.xaml
-/// </summary>
+
 public partial class MainWindow : Window {
    public MainWindow () {
       InitializeComponent ();
+      mGTLCommand = new RelayCommand (GoToLine, ContentLoaded);
+      InputBindings.Add (new KeyBinding (mGTLCommand, mGTLGesture));
       mFileTree.ItemsSource = mTreeViewItems;
+      mRunHeight = (int)new FormattedText ("9999", CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                        new Typeface (mFlowDoc.FontFamily.ToString ()), mFlowDoc.FontSize, Brushes.Black, null, 1).Height;
    }
+   readonly RelayCommand mGTLCommand;
+   readonly KeyGesture mGTLGesture = new (Key.G, ModifierKeys.Control);
+
+   #region Implmentation --------------------------------------------
+   void AddContext (string path) {
+      mFlowDoc.Blocks.Clear ();
+      var para = new Paragraph ();
+      int line = 0;
+      if (!mFilesOnMain.TryGetValue (path, out var mainContent)) para.Inlines.Add (new Run ("File Deleted"));
+      else foreach (var item in mainContent) para.Inlines.Add (new Run ($"{++line,4} │ {item}\n"));
+      mFlowDoc.Blocks.Add (para);
+   }
+
+   /// <summary>Returns true if FlowDocument content has been loaded.</summary>
+   // Using a get-only method instead of property so it can be passed
+   // to the RelayCommand Constructor as a canExecute condition
+   static bool ContentLoaded () => mContentLoaded;
+   static bool mContentLoaded;
 
    Error RunShellScript () {
       Reset ();
@@ -54,6 +75,11 @@ public partial class MainWindow : Window {
       }
       return OK;
    }
+
+   /// <summary>Scrolls to line number</summary>
+   public void ScrollTo (int pos) => mScroller?.ScrollToVerticalOffset (pos * mRunHeight);
+   ScrollViewer? mScroller;
+   readonly int mRunHeight;
 
    static Error CompareFiles () {
       if (mOutFile is null) return OutFileNotFound;
@@ -113,6 +139,7 @@ public partial class MainWindow : Window {
          else fileList.TryAdd (file, File.ReadAllLines (file));
       }
    }
+   #endregion
 
    #region WPF Events -----------------------------------------------
    void OnMouseWheel (object sender, MouseWheelEventArgs e)
@@ -125,13 +152,13 @@ public partial class MainWindow : Window {
       AddContext (file.FullName);
    }
 
-   void AddContext (string path) {
-      mFlowDoc.Blocks.Clear ();
-      var para = new Paragraph ();
-      if (!mFilesOnMain.TryGetValue (path, out var mainContent)) para.Inlines.Add (new Run ("File Deleted"));
-      else foreach (var item in mainContent) para.Inlines.Add (new Run ($"{item}\n"));
-      mFlowDoc.Blocks.Add (para);
+   /// <summary>Navigates to user entered line number.</summary>
+   void GoToLine () {
+      mGoToLine = new GoToLine (mMaxRows) { Owner = this };
+      if (mGoToLine.ShowDialog () is true) ScrollTo (mGoToLine.LineNumber);
    }
+   int mMaxRows;
+   GoToLine? mGoToLine;
 
    void OnOpenClicked (object sender, RoutedEventArgs e) {
       Reset ();
@@ -146,6 +173,8 @@ public partial class MainWindow : Window {
          mSelectedRep.Content = folderPath;
          if (Directory.GetDirectories (folderPath, ".git", SearchOption.TopDirectoryOnly).Length == 0) return SelectedFolderIsNotARepository;
          mRep = folderPath.ToString ();
+         var folder = $"{mRep}html";
+         if (!Directory.Exists (folder)) Directory.CreateDirectory (folder);
          mOutFile = $"{mRep}html/Changes.txt";
 
          using (PowerShell powershell = PowerShell.Create ()) {

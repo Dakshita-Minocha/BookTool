@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Blend for Visual Studio Version 17
+# Visual Studio Version 17
 VisualStudioVersion = 17.10.35027.167
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BookTool", "BookTool.csproj", "{8FF6B068-7089-4431-9BFC-2F233D595218}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BookTool", "BookTool\BookTool.csproj", "{367D8673-F50C-4E78-B9F2-208DCAC2E547}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +11,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{8FF6B068-7089-4431-9BFC-2F233D595218}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8FF6B068-7089-4431-9BFC-2F233D595218}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8FF6B068-7089-4431-9BFC-2F233D595218}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8FF6B068-7089-4431-9BFC-2F233D595218}.Release|Any CPU.Build.0 = Release|Any CPU
+		{367D8673-F50C-4E78-B9F2-208DCAC2E547}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{367D8673-F50C-4E78-B9F2-208DCAC2E547}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{367D8673-F50C-4E78-B9F2-208DCAC2E547}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{367D8673-F50C-4E78-B9F2-208DCAC2E547}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
