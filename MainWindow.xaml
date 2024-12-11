@@ -21,6 +21,7 @@
             <Label Grid.Column="1" Content="Enter Last Translated Commit:" HorizontalAlignment="Left" Margin="4"/>
             <TextBox x:Name="mTBCommitID" Width="100" Margin="4"/>
             <Button Content="Load Content" Height="25" Margin="4" Click="OnClickContentLoad"/>
+            <Button Content="Export"  Height="25" Margin="4" Click="OnClickExport"/>
         </StackPanel>
         <Border Grid.RowSpan="2" Grid.Row="0" BorderBrush="LightGray" BorderThickness="1">
             <ScrollViewer Name="mTreeScroll" PreviewMouseWheel="OnMouseWheel" Background="LightGray">
@@ -37,7 +38,7 @@
                 <ColumnDefinition />
             </Grid.ColumnDefinitions>
             <FlowDocumentScrollViewer Name="mScrollerLeft" Margin="8" HorizontalScrollBarVisibility="Hidden" BorderBrush="LightGray" BorderThickness="1">
-                <FlowDocument Name="mFlowDocLeft" PagePadding="20" FontFamily="Consolas" FontSize="18"/>
+                <FlowDocument Name="mFlowDoc" PagePadding="20" FontFamily="Consolas" FontSize="18"/>
             </FlowDocumentScrollViewer>
         </Grid>
     </Grid>

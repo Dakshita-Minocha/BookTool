@@ -2,7 +2,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Management.Automation;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -17,11 +16,12 @@ namespace BookTool;
 public partial class MainWindow : Window {
    public MainWindow () {
       InitializeComponent ();
+      mFileTree.ItemsSource = mTreeViewItems;
    }
 
    Error RunShellScript () {
       Reset ();
-      if (mRep is null) return RepNotFound;
+      if (mRep is null) return SelectedFolderIsNotARepository;
       if (mCommitID is null) return InvalidCommitID;
       Collection<PSObject> results;
       string branchName = $"changesUpto.{mCommitID}";
@@ -41,9 +41,8 @@ public partial class MainWindow : Window {
             return NoChangesMadeAfterCommit; //  (HEAD -> master, changesUpto.f7a2d7d)
          powershell.AddScript ($"git checkout -b {branchName} {mCommitID}");
          results = powershell.Invoke ();
-         if (results.Count is not 0) {
+         if (results.Count is not 0)
             powershell.AddScript ($"git branch -D {branchName}; git checkout -b {branchName} {mCommitID}");
-         }
          powershell.AddScript ($"git checkout {branchName}");
          results = powershell.Invoke ();
          // diff highlights changes made AFTER selected commit ID
@@ -62,10 +61,10 @@ public partial class MainWindow : Window {
       // Branch will always be BEHIND main
       // If the branch has extra files: files were deleted in later commits
       // If main has extra files: new files were added in subsequent commits
-      List<string> changes = new ();
+      mChanges.Clear ();
       int index = 0;
       foreach (var file in list) {
-         if (changes.Count != 0) index = changes.Count;
+         if (mChanges.Count != 0) index = mChanges.Count;
          bool branchExists = mFilesOnBranch.TryGetValue (file, out var branchContent);
          bool mainExists = mFilesOnMain.TryGetValue (file, out var mainContent);
          if (!branchExists && mainExists)
@@ -83,42 +82,35 @@ public partial class MainWindow : Window {
             }
             for (int i = mainLen; i < branchLen; i++) AddChange ($"- {branchContent[i]}", i + 1);
          }
-         if (changes.Count != index) { AddFile (file, index); mTreeViewItems.Add (file); }
+         if (mChanges.Count != index) {
+            AddFile (file, index);
+            mTreeViewItems.Add (new FileInfo (file)); }
       }
-      if (changes.Count != 0) { WriteToFile (mOutFile, changes); return OK; }
-      return NoChangesMadeAfterCommit;
+      return mChanges.Count != 0 ? OK : NoChangesMadeAfterCommit;
 
       // Helper methods -------------------------------------------
-      void AddChange (string change, int line) => changes.Add ($"   {line}   {change}\n");
-      void AddChangeOnly (string change) => changes.Add ($"   {change}\n");
+      void AddChange (string change, int line) => mChanges.Add ($"   {line}   {change}\n");
+      void AddChangeOnly (string change) => mChanges.Add ($"   {change}\n");
       void AddFile (string fileName, int insertAt) {
-         changes.Insert (insertAt, $"{fileName}\n");
-         changes.Add ("EOF\n");
+         mChanges.Insert (insertAt, $"{fileName}\n");
+         mChanges.Add ("EOF\n");
       }
    }
 
-   static void WriteToFile (string outFile, List<string> changes) {
-      File.WriteAllLines (outFile, changes);
-   }
-
+   static void WriteToFile (string outFile, List<string> changes) => File.WriteAllLines (outFile, changes);
 
    static void GatherFiles (string rep, Dictionary<string, string[]> fileList) {
-      AddFiles (rep, fileList);
-
-      // HELPER
-      static void AddFiles (string folder, Dictionary<string, string[]> fileList) {
-         DirectoryInfo directoryInfo = new (folder);
-         var gatheredFiles = directoryInfo.EnumerateFiles ("*.*", SearchOption.AllDirectories)
-                                    .Where (f => f.Extension.Equals (".adoc", StringComparison.OrdinalIgnoreCase) ||
-                                                f.Extension.Equals (".md", StringComparison.OrdinalIgnoreCase) ||
-                                                f.Extension.Equals (".txt", StringComparison.OrdinalIgnoreCase))
-                                    .Select (f => f.FullName)
-                                    .ToArray ();
-         foreach (var file in gatheredFiles) {
-            if (fileList.TryGetValue (file, out var _))
-               fileList[file] = File.ReadAllLines ($"{file}");
-            else fileList.TryAdd (file, File.ReadAllLines (file));
-         }
+      DirectoryInfo directoryInfo = new (rep);
+      var gatheredFiles = directoryInfo.EnumerateFiles ("*.*", SearchOption.AllDirectories)
+                                 .Where (f => f.Extension.Equals (".adoc", StringComparison.OrdinalIgnoreCase) ||
+                                             f.Extension.Equals (".md", StringComparison.OrdinalIgnoreCase) ||
+                                             f.Extension.Equals (".txt", StringComparison.OrdinalIgnoreCase))
+                                 .Select (f => f.FullName);
+                                 //.ToArray ();
+      foreach (var file in gatheredFiles) {
+         if (fileList.TryGetValue (file, out var _))
+            fileList[file] = File.ReadAllLines ($"{file}");
+         else fileList.TryAdd (file, File.ReadAllLines (file));
       }
    }
 
@@ -129,12 +121,16 @@ public partial class MainWindow : Window {
    void OnSelectionChanged (object sender, RoutedPropertyChangedEventArgs<object> e) {
       if (sender is not TreeView tv || tv.SelectedItem is not TreeViewItem selected) return;
       selected.IsExpanded = !selected.IsExpanded;
-      if (selected.Tag is not string path || !File.Exists (path)) return;
-      Reset ();
-      //mFlowDocRight.Blocks.Clear ();
-      //ScrollTo (0);
-      //mContentLoaded = false;
-      //AddContent (path);
+      if (selected.Tag is not FileInfo file) return;
+      AddContext (file.FullName);
+   }
+
+   void AddContext (string path) {
+      mFlowDoc.Blocks.Clear ();
+      var para = new Paragraph ();
+      if (!mFilesOnMain.TryGetValue (path, out var mainContent)) para.Inlines.Add (new Run ("File Deleted"));
+      else foreach (var item in mainContent) para.Inlines.Add (new Run ($"{item}\n"));
+      mFlowDoc.Blocks.Add (para);
    }
 
    void OnOpenClicked (object sender, RoutedEventArgs e) {
@@ -142,11 +138,13 @@ public partial class MainWindow : Window {
       OpenFolderDialog fd = new () { Multiselect = false, DefaultDirectory = "C:" };
       fd.ShowDialog ();
       var err = SetRep ();
+      if (err != OK) UpdateDoc (err);
 
       // Helper Methods ---------------------------------------------
       Error SetRep () {
          string folderPath = fd.FolderName;
          mSelectedRep.Content = folderPath;
+         if (Directory.GetDirectories (folderPath, ".git", SearchOption.TopDirectoryOnly).Length == 0) return SelectedFolderIsNotARepository;
          mRep = folderPath.ToString ();
          mOutFile = $"{mRep}html/Changes.txt";
 
@@ -168,14 +166,14 @@ public partial class MainWindow : Window {
       if (mOutFile is null) return;
       var f = File.Create (mOutFile);
       f?.Close ();
-      Error error = Clear;
+      Error error;
       if ((error = ValidateCommitID ()) != OK) { UpdateDoc (error); return; }
       if ((error = RunShellScript ()) != OK) { UpdateDoc (error); return; }
       error = CompareFiles ();
       UpdateDoc (error);
-      mFileTree.ItemsSource = mTreeViewItems.Select (a => a.Split (mSeparator).LastOrDefault ());
+      mFileTree.ItemsSource = mTreeViewItems.Select (a => new TreeViewItem () { Header = a.Name, Tag = a});
    }
-   static List <string> mTreeViewItems = [];
+   static List<FileInfo> mTreeViewItems = [];
 
    Error ValidateCommitID () {
       if (mTBCommitID.Text is not string id) return InvalidCommitID;
@@ -184,20 +182,26 @@ public partial class MainWindow : Window {
       return OK;
    }
 
-   void Reset () { mFlowDocLeft.Blocks.Clear (); mFileTree.ItemsSource = null; mTreeViewItems.Clear (); }
+   void Reset () { mFlowDoc.Blocks.Clear (); mFileTree.ItemsSource = null; mTreeViewItems.Clear (); }
 
    void UpdateDoc (Error err) {
-      mFlowDocLeft.Blocks.Clear ();
+      mFlowDoc.Blocks.Clear ();
       var para = new Paragraph ();
-      if (mOutFile is null || mCommitID is null) return;
       switch (err) {
          case OK:
-            var file = File.ReadAllLines (mOutFile).ToList ();
-            file.ForEach (line => para.Inlines.Add (new Run ($"{line}\n"))); break;
+            mChanges.ForEach (line => para.Inlines.Add (new Run ($"{line}\n"))); break;
          case Clear: break;
          default: para.Inlines.Add (new Run (err.ToString ())); break;
       }
-      mFlowDocLeft.Blocks.Add (para);
+      mFlowDoc.Blocks.Add (para);
+   }
+
+   void OnClickExport (object sender, RoutedEventArgs e) {
+      Error error = OK;
+      if (mOutFile is null) error = OutFileNotFound;
+      else if (mChanges.Count < 0) error = NoCommitsFound;
+      UpdateDoc (error);
+      if (mOutFile is not null) WriteToFile (mOutFile, mChanges);
    }
 
    void OnTreeViewExpanded (object sender, RoutedEventArgs e) {
@@ -210,7 +214,7 @@ public partial class MainWindow : Window {
    #region Nested Types ---------------------------------------------
    public enum Error {
       OK = 0,
-      RepNotFound,
+      SelectedFolderIsNotARepository,
       OutFileNotFound,
       NoCommitsFound,
       InvalidCommitID,
@@ -223,5 +227,6 @@ public partial class MainWindow : Window {
    #region Private Data ---------------------------------------------
    static string? mRep, mCommitID, mOutFile, mMain;
    static Dictionary<string, string[]> mFilesOnMain = new (), mFilesOnBranch = new ();
+   static List<string> mChanges = [];
    #endregion
 }
