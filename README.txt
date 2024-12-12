@@ -16,6 +16,8 @@ BookTool Workflow:
    - Go to a repository of your choice (must contain .git folder).
    - Enter the commitID which was last translated.
    - Click on 'Load Content'.
+   - Click on 'Export' to save Changes.txt file in corresponding html folder.
+   - Click on file name in File tree on the left to view full file.
 
 Shortcuts:
    Press [Ctrl+G] to go to a specific line in document after content has loaded.
