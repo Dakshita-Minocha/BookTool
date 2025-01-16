@@ -1,15 +1,8 @@
 ﻿using System.Collections.ObjectModel;
-using System.Formats.Asn1;
 using System.IO;
 using System.Management.Automation;
 using static BookTool.Error;
 namespace BookTool;
-// Generate patch - done
-// Copy english patch to target repository. - implement target repo (later)
-// Read change from patch, attempt to form para.
-// Apply patch
-
-
 
 public static class Patch {
    public static Repository? Source { get; set; }
@@ -38,7 +31,6 @@ public static class Patch {
          results = powershell.Invoke ();
          powershell.AddScript ($"copy change1.patch \"{Target.Path}/change1.DE.patch\"");
          powershell.Invoke ();
-         //if (powershell.HadErrors) { Errors.AddRange (powershell.Streams.Error.Select (a => a.ErrorDetails.ToString ())); return ErrorGeneratingPatch; }
          powershell.AddScript ($"git checkout -b {branchName} {CommitID}");
          results = powershell.Invoke ();
          if (results.Count is not 0)
