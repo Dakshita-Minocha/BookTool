@@ -128,14 +128,6 @@ public partial class MainWindow : Window {
       Reset ();
       if (Apply () == OK) mChanges.Add ("Patch Applied.");
       UpdateDoc (OK);
-      using (PowerShell powershell = PowerShell.Create ()) {
-         var root = (Path.GetPathRoot (Target?.Path) ?? "C:").Replace ("\\", "");
-         powershell.AddScript ($"{root}");
-         powershell.AddScript ($"cd {root}\\;cd \"{Target.Path}\"; git sw main");
-         powershell.Invoke ();
-         powershell.AddScript ($"git di");
-         powershell.Invoke ();
-      }
    }
 
    void OnTBMouseDown (object sender, MouseButtonEventArgs e) {

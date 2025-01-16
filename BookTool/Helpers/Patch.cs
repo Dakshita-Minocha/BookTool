@@ -82,11 +82,11 @@ public static class Patch {
          } else if (oldStartLine != -1 && oldTotalLines != -1 && file1 != null && file2 != null) {
             int k, newStartLine = oldStartLine, newTotalLines = oldTotalLines;
             // insert para lines (before generated context)
-            for (k = oldStartLine - 1; k >= 0 && file1Content[k].EndsWith ('\n'); k--) {
-               patchFile.Insert (contextLine, ' ' + file1Content[k]);
-               newStartLine = k + 1;
-               newTotalLines++;
-            }
+            //for (k = oldStartLine - 1; k >= 0 && file1Content[k].EndsWith ('\n'); k--) {
+            //   patchFile.Insert (contextLine, ' ' + file1Content[k]);
+            //   newStartLine = k + 1;
+            //   newTotalLines++;
+            //}
             k = oldStartLine - 1;
             if (k > 1) patchFile[i - 1] = patchFile[i - 1][..(patchFile[i - 1].LastIndexOf ('@') + 1)] + ' ' + file1Content[k - 2];
             // replace context lines with translated text
@@ -98,10 +98,10 @@ public static class Patch {
                }
             }
             // insert lines to complete para (after context lines)
-            for (k = oldStartLine + oldTotalLines; k < file1Content.Count && file1Content[k].EndsWith ('\n'); k++) patchFile.Add (file1Content[k]);
+            //for (k = oldStartLine + oldTotalLines; k < file1Content.Count && file1Content[k].EndsWith ('\n'); k++) patchFile.Add (file1Content[k]);
 
             // change line value in contextLine
-            patchFile[contextLine] = patchFile[contextLine].Replace ($"{oldStartLine},{oldTotalLines}", $"{newStartLine},{newTotalLines}");
+            //patchFile[contextLine] = patchFile[contextLine].Replace ($"{oldStartLine},{oldTotalLines}", $"{newStartLine},{newTotalLines}");
             (oldStartLine, oldTotalLines) = (-1, -1); i--;
          }
       }
