@@ -8,7 +8,7 @@
         Title="MainWindow" Height="450" Width="800" WindowState="Maximized">
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="40"/>
+            <RowDefinition Height="55"/>
             <RowDefinition/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
@@ -16,12 +16,19 @@
             <ColumnDefinition/>
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Column="1" Orientation="Horizontal">
-            <Button x:Name="mOpen" Content="Select Repository" Height="25" Margin="4" Click="OnOpenClicked"/>
-            <Label x:Name="mSelectedRep" Height="25" Margin="4" Width="150"/>
-            <Label Grid.Column="1" Content="Enter Last Translated Commit:" HorizontalAlignment="Left" Margin="4"/>
-            <TextBox x:Name="mTBCommitID" Width="100" Margin="4"/>
-            <Button Content="Load Content" Height="25" Margin="4" Click="OnClickContentLoad"/>
-            <Button x:Name="mBtnExport" Content="Export" Height="25" Margin="4" Click="OnClickExport"/>
+            <StackPanel Orientation="Vertical">
+                <DockPanel Margin="4">
+                <Button x:Name="mOpenEN" Content="EN Repository" Click="OnOpenClicked"/>
+                <Label x:Name="mSelectedRep" Width="150"/>
+                </DockPanel>
+                <DockPanel Margin="4">
+                    <Button x:Name="mOpenTarget" Content="Target Repository" Click="OnOpenClicked"/>
+                    <Label x:Name="mTargetRep" Width="150"/>
+                </DockPanel>
+            </StackPanel>
+            <TextBox x:Name="mTBCommitID" Width="100" Margin="4" AutoWordSelection="True" MaxLines="1" Text="Last Translated Commit ID" FontSize="8" FontStyle="Italic" Height="20" VerticalContentAlignment="Center" PreviewMouseDown="OnTBMouseDown"/>
+            <Button Content="Load Changes" Height="25" Margin="4" Click="OnClickContentLoad"/>
+            <Button x:Name="mBtnApply" Content="Apply Patch" Height="25" Margin="4" Click="OnClickApply"/>
         </StackPanel>
         <Border Grid.RowSpan="2" Grid.Row="0" BorderBrush="LightGray" BorderThickness="1">
             <ScrollViewer Name="mTreeScroll" PreviewMouseWheel="OnMouseWheel" Background="LightGray">

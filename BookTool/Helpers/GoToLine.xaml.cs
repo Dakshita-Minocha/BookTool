@@ -63,9 +63,8 @@ public partial class GoToLine : Window, INotifyPropertyChanged {
 #endregion
 
 #region Class LineRule ----------------------------------------------------------------------------
-public class LineRule : ValidationRule {
-   public LineRule (int max) => mMax = max;
-   readonly int mMax;
+public class LineRule (int max) : ValidationRule {
+   readonly int mMax = max;
    public override ValidationResult Validate (object value, CultureInfo cultureInfo)
       => int.TryParse ((string)value, out var line) && line > 0 && line < mMax ? ValidationResult.ValidResult : new ValidationResult (false, "Invalid line number");
 }
