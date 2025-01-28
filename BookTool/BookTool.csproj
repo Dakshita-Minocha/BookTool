@@ -7,23 +7,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <OutDir>C:/mm/bin</OutDir>
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
+    <!--<PublishSingleFile>true</PublishSingleFile>-->
+    <!--<SelfContained>true</SelfContained>-->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <DebugType>embedded</DebugType>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <!--<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>-->
+    <!--<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>-->
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <Optimize>True</Optimize>
+    <!--<Optimize>True</Optimize>-->
   </PropertyGroup>
 
   <PropertyGroup>
     <!--<PublishRelease>true</PublishRelease>-->
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Cake.Powershell" Version="4.0.0" />
-  </ItemGroup>
 
 </Project>
