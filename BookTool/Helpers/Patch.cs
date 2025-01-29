@@ -73,7 +73,7 @@ public static class Patch {
             // reading c, d
             j = line.IndexOf ('+') + 1; k = j + line[j..].IndexOf (','); l = k + line.AsSpan (k).IndexOf ('@');
             // @@ -0,0 +1 @@ : may or may not occur in new file mode, in which case we read the num of lines added and skip those.
-            if (k <= j) {
+            if (k <= j || newFile) {
                int.TryParse (line.AsSpan (j), out d); // it is a new file
                i += d + 1; // +1 for the "/ No newline at end of file" added in patch by git.
                continue;
