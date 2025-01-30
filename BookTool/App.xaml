@@ -4,6 +4,11 @@
              xmlns:local="clr-namespace:FlowDoc"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
+        <Style x:Key="{x:Type Run}" TargetType="{x:Type Run}">
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="FontFamily" Value="times new roman"/>
+        </Style>
+        
                 <!-- TreeViewItem -->
                 <Style x:Key="{x:Type TreeViewItem}" TargetType="{x:Type TreeViewItem}">
                     <Setter Property="ItemTemplate">
@@ -24,7 +29,7 @@
                             <ControlTemplate TargetType="{x:Type Thumb}">
                                 <Grid x:Name="Grid">
                                     <Rectangle HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Width="Auto" Height="Auto" Fill="Transparent" />
-                                    <Border x:Name="Rectangle1" CornerRadius="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Width="Auto" Height="Auto"  Background="{TemplateBinding Background}" />
+                                    <Border x:Name="Rectangle1" CornerRadius="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Width="Auto" Height="Auto" Background="{TemplateBinding Background}" />
                                 </Grid>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="Tag" Value="Horizontal">
@@ -53,7 +58,7 @@
 
                                     <Track x:Name="PART_Track" IsDirectionReversed="true" Focusable="false">
                                         <Track.Thumb>
-                                            <Thumb x:Name="Thumb" Background="LightGray" Style="{DynamicResource ScrollThumbs}" />
+                                            <Thumb x:Name="Thumb" Background="DarkGray" Style="{DynamicResource ScrollThumbs}" />
                                         </Track.Thumb>
                                         <Track.IncreaseRepeatButton>
                                             <RepeatButton x:Name="PageUp" Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="false" />
@@ -66,10 +71,10 @@
 
                                 <ControlTemplate.Triggers>
                                     <Trigger SourceName="Thumb" Property="IsMouseOver" Value="true">
-                                        <Setter Value="DarkGray" TargetName="Thumb" Property="Background" />
+                                        <Setter Value="Gray" TargetName="Thumb" Property="Background" />
                                     </Trigger>
                                     <Trigger SourceName="Thumb" Property="IsDragging" Value="true">
-                                        <Setter Value="DarkGray" TargetName="Thumb" Property="Background" />
+                                        <Setter Value="Gray" TargetName="Thumb" Property="Background" />
                                     </Trigger>
 
                                     <Trigger Property="IsEnabled" Value="false">

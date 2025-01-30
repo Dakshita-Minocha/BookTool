@@ -50,51 +50,58 @@ public static class Patch {
       ReadOnlySpan<char> file1, file2;
       int oldStartLine = -1, oldTotalLines = -1, aIndex, fileLine = 0;
       bool newFile = false, fileDeleted = false;
-      for (int i = 0; i < sPatch.Count; i++) {
-         string line = sPatch[i];
-         switch (line[0]) {
-            case 'd':
-               aIndex = line.IndexOf ("diff --git a/");
-               (oldStartLine, oldTotalLines) = (-1, -1);
-               var bIndex = line.IndexOf ("b/");
-               file1 = line.AsSpan (aIndex + 13, bIndex - (aIndex + 13)).Trim ();
-               file2 = line.AsSpan (bIndex + 2).Trim ();
-               newFile = sPatch[++i].StartsWith ("new file mode"); // It may be rename/copy, file will not exist in target rep in this case.
-               fileDeleted = sPatch[i].StartsWith ("deleted file mode 100644");
-               if (!newFile && string.Compare (file1.ToString (), file2.ToString ()) == 0 && !fileDeleted)
-                  file1Content = [.. File.ReadAllLines ($"{Target.Path}/{file1}")];
-               break;
-            case '@':
-               // @@ -2,9 +2,8 @@ = @@ -a,b + c,d @@
-               // We always consider number of lines added (c, d).
-               int a = 1, b = 1, c = 1, d = 1;
-               fileLine = 0;
-               // reading a,b:
-               int j = line.IndexOf ('-') + 1, k = j + line[j..].IndexOf (','), l = k + line.AsSpan (k).IndexOf ('+');
-               if (!int.TryParse (line.AsSpan (j, k - j), out a)) a = 1;
-               if (l <= k || fileDeleted) {
-                  int.TryParse (line.AsSpan (k), out b); // "@@ -1 +1,3 @@" old file was overwritten.
-                  (oldStartLine, oldTotalLines) = (1, b); continue;
-               } else int.TryParse (line[(k + 1)..l], out b);
-               if (fileDeleted) i += b + 1;
-               // reading c, d
-               j = line.IndexOf ('+') + 1; k = j + line[j..].IndexOf (','); l = k + line.AsSpan (k).IndexOf ('@');
-               // @@ -0,0 +1 @@ : may or may not occur in new file mode, in which case we read the num of lines added and skip those.
-               if (k <= j || newFile) {
-                  int.TryParse (line.AsSpan (j), out d); // it is a new file
-                  i += d + 1; // +1 for the "/ No newline at end of file" added in patch by git.
-                  continue;
-               } else int.TryParse (line[(k + 1)..l], out d);
-               if (!int.TryParse (line.AsSpan (j, k - j), out c)) c = 1;
-               (oldStartLine, oldTotalLines) = (Math.Min (a, c), d);
-               break;
-            case '+': break;
-            case '-': 
-               if (oldStartLine != -1 && oldTotalLines != -1 && fileLine < oldStartLine - 1 + oldTotalLines) sPatch[i] = '-' + file1Content[oldStartLine - 1 + fileLine++];
-               break;
-            case ' ': if (oldStartLine != -1 && oldTotalLines != -1 && fileLine < oldStartLine - 1 + oldTotalLines - 1) sPatch[i] = ' ' + file1Content[oldStartLine - 1 + fileLine++]; break;
-            case '\\': break; // "/ No newline at end of file" marks EOF
+      try {
+         for (int i = 0; i < sPatch.Count; i++) {
+            string line = sPatch[i];
+            switch (line[0]) {
+               case 'd':
+                  aIndex = line.IndexOf ("diff --git a/");
+                  (oldStartLine, oldTotalLines) = (-1, -1);
+                  var bIndex = line.IndexOf ("b/");
+                  file1 = line.AsSpan (aIndex + 13, bIndex - (aIndex + 13)).Trim ();
+                  file2 = line.AsSpan (bIndex + 2).Trim ();
+                  newFile = sPatch[++i].StartsWith ("new file mode"); // It may be rename/copy, file will not exist in target rep in this case.
+                  fileDeleted = sPatch[i].StartsWith ("deleted file mode 100644");
+                  if (!newFile && string.Compare (file1.ToString (), file2.ToString ()) == 0 && !fileDeleted)
+                     file1Content = [.. File.ReadAllLines ($"{Target.Path}/{file1}")];
+                  break;
+               case '@':
+                  // @@ -2,9 +2,8 @@ = @@ -a,b + c,d @@
+                  // We always consider number of lines added (c, d).
+                  int a = 1, b = 1, c = 1, d = 1;
+                  fileLine = 0;
+                  // reading a,b:
+                  int j = line.IndexOf ('-') + 1, k = j + line[j..].IndexOf (','), l = k + line.AsSpan (k).IndexOf ('+');
+                  if (!int.TryParse (line.AsSpan (j, k - j), out a)) a = 1;
+                  if (l <= k || fileDeleted) {
+                     int.TryParse (line.AsSpan (k), out b); // "@@ -1 +1,3 @@" old file was overwritten.
+                     (oldStartLine, oldTotalLines) = (1, b); continue;
+                  } else int.TryParse (line[(k + 1)..l], out b);
+                  if (fileDeleted) i += b + 1;
+                  // reading c, d
+                  j = line.IndexOf ('+') + 1; k = j + line[j..].IndexOf (','); l = k + line.AsSpan (k).IndexOf ('@');
+                  // @@ -0,0 +1 @@ : may or may not occur in new file mode, in which case we read the num of lines added and skip those.
+                  if (k <= j || newFile) {
+                     int.TryParse (line.AsSpan (j), out d); // it is a new file
+                     i += d + 1; // +1 for the "/ No newline at end of file" added in patch by git.
+                     continue;
+                  } else int.TryParse (line[(k + 1)..l], out d);
+                  if (!int.TryParse (line.AsSpan (j, k - j), out c)) c = 1;
+                  (oldStartLine, oldTotalLines) = (Math.Min (a, c), d);
+                  if (oldStartLine > 1) sPatch[i] = sPatch[i][..(sPatch[i].LastIndexOf ('@') + 1)] + ' ' + file1Content[oldStartLine - 2];
+                  break;
+               case '+': break;
+               case '-':
+                  if (oldStartLine != -1 && oldTotalLines != -1 && fileLine < oldStartLine - 1 + oldTotalLines) sPatch[i] = '-' + file1Content[oldStartLine - 1 + fileLine++];
+                  break;
+               case ' ': if (oldStartLine != -1 && oldTotalLines != -1 && fileLine < oldStartLine - 1 + oldTotalLines - 1) sPatch[i] = ' ' + file1Content[oldStartLine - 1 + fileLine++]; break;
+               case '\\': break; // "/ No newline at end of file" marks EOF
+            }
          }
+      } catch {
+         return ErrorGeneratingPatch;
+      } finally {
+         sPatch.ForEach (a => a.Replace ("\n\r", "\n"));
       }
       return OK;
    }
@@ -103,8 +110,11 @@ public static class Patch {
       if (Target == null) return SetTargetRepository;
       if (sPatch is null) return CannotApplyPatch;
       var results = RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out int nExit, workingdir: Target.Path);
+      sPatch.ForEach (a => a.Replace ("\n", "\n\r"));
+      RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target.Path);
+      RunHiddenCommandLineApp ("git.exe", $"clean -f", out _, workingdir: Target.Path);
       File.WriteAllLines ($"{Target.Path}/change1.DE.patch", sPatch);
-      results = RunHiddenCommandLineApp ("git.exe", $"apply change1.DE.patch", out nExit, workingdir: Target.Path);
+      results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn change1.DE.patch", out nExit, workingdir: Target.Path);
       if (nExit != 0 || results.Count != 0) {
          Errors.AddRange (results);
          return CannotApplyPatch;

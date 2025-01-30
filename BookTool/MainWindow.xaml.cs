@@ -19,8 +19,7 @@ public partial class MainWindow : Window {
       mRunHeight = (int)new FormattedText ("9999", CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                         new Typeface (mENDoc.FontFamily.ToString ()), mENDoc.FontSize, Brushes.Black, null, 1).Height;
       Loaded += delegate {
-         mScroller = (ScrollViewer)((Decorator)VisualTreeHelper.GetChild (VisualTreeHelper.GetChild (mENDocScroll, 0), 0)).Child;
-         //mBtnExport.InputBindings.Add (new CommandBinding (mContentLoaded, (s, e) => mBtnExport.IsEnabled = !IsEnabled));
+         mScroller = (ScrollViewer)((Decorator)VisualTreeHelper.GetChild (VisualTreeHelper.GetChild (mLangDocScroll, 0), 0)).Child;
       };
    }
    readonly RelayCommand mGTLCommand;
@@ -38,11 +37,11 @@ public partial class MainWindow : Window {
    ScrollViewer? mScroller;
    readonly int mRunHeight;
 
-   void Reset () { UpdateDoc (mLangDoc, Clear); UpdateDoc (mENDoc, Clear); mTreeViewItems.Clear (); mBtnApply.IsEnabled = false; mChanges.Clear (); }
+   void Reset () { UpdateDoc (mLangDoc, Clear); UpdateDoc (mENDoc, Clear); mTreeViewItems.Clear (); mFileTree.Items.Clear (); mBtnApply.IsEnabled = false; mChanges.Clear (); }
 
    void UpdateDoc (FlowDocument doc, Error err) {
       doc.Blocks.Clear ();
-      var para = new Paragraph ();
+      var para = new Paragraph () { KeepTogether = true, TextAlignment = TextAlignment.Left };
       switch (err) {
          case OK:
             mChanges.ForEach (line => para.Inlines.Add (new Run ($"{line}\n") {
@@ -123,7 +122,7 @@ public partial class MainWindow : Window {
       var dir = info.GetDirectories ().Where (a => !a.Name.StartsWith ('.'));
       foreach (var folder in dir) {
          var item = MakeTVI (folder.Name);
-         if (Path.GetDirectoryName (folder.Name) is string path) AddSubItems (path, item);
+         if (Path.GetDirectoryName (folder.Name) is string path && !string.IsNullOrWhiteSpace (path)) AddSubItems (path, item);
          if (item.HasItems) mFileTree.Items.Add (item);
       }
       var item2 = MakeTVI (info.Name, expanded: true);
@@ -159,9 +158,9 @@ public partial class MainWindow : Window {
       else if (tv.Tag is string path) {
          var file = File.ReadAllLines (path).ToList ();
          mLangDoc.Blocks.Clear ();
-         var para = new Paragraph ();
+         var para = new Paragraph () { KeepTogether = true, TextAlignment = TextAlignment.Left };
          int count = 1;
-         file.ToList ().ForEach ((line) => { para.Inlines.Add (new Run ($"{count++,4}│") { Foreground = Brushes.Red }); para.Inlines.Add (new Run ($"{line}\n")); });
+         file.ToList ().ForEach ((line) => { para.Inlines.Add (new Run ($"{count++,4} │") { Foreground = Brushes.Red }); para.Inlines.Add (new Run ($"{line}\n")); });
          mLangDoc.Blocks.Add (para);
          mContentLoaded = true;
       }
