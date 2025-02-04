@@ -74,7 +74,7 @@ public static class Patch {
                      sPatch.InsertRange (i, file1Content[(startLine + totalLines - 4)..(startLine + totalLines - 1)].Select (a => $" {a}"));
                      i += 3;
                   }
-                  // @@ -2,9 +2,8 @@ = @@ -a,b + c,d @@
+                  // @@ -2,9 +2,8 @@ = @@ -sL,tL +sL2,tL2 @@
                   // This comes in multiple variations:
                   // @@ -1 +1,3 @@ : file overwritten.
                   // @@ -0,0 +1 @@ : may or may not occur in new file mode, in which case we read the num of lines added and skip those.
@@ -97,14 +97,17 @@ public static class Patch {
                   } else int.TryParse (line[(k + 1)..l], out tL2);
                   if (!int.TryParse (line.AsSpan (j, k - j), out sL2)) sL2 = 1;
 
-                  // We always consider number of lines added (c, d).
+                  // We always consider number of lines added (d).
                   (startLine, totalLines) = (Math.Min (sL, sL2), tL2);
+
+                  // adding 3 lines for context before patch
                   if (startLine > 3) {
-                     startLine -= 3;
-                     sPatch.InsertRange (i + 1, file1Content[(startLine - 1)..(startLine + 2)].Select (a => $" {a}\n"));
+                     startLine -= 3; totalLines += 3; tL2 += 3; tL += 3;
+                     sPatch.InsertRange (i + 1, file1Content[(startLine - 1)..(startLine + 2)].Select (a => $" {a}"));
                   }
-                  if ((startLine + totalLines + 6) <= file1Content.Count) totalLines += 6;
-                  if (startLine > 1) sPatch[i] = $"@@ -{startLine},{totalLines} +{startLine},{totalLines} @@ {file1Content[startLine - 2]}";
+                  // 3 lines for context after patch
+                  if (startLine + totalLines + 3 < file1Content.Count) totalLines += 3;
+                  sPatch[i] = $"@@ -{startLine},{(tL != tL2 ? tL : totalLines)} +{startLine},{totalLines} @@ {(startLine > 1 ? file1Content[startLine - 2] : "")}";
                   break;
                case '+': break;
                case '-':
@@ -117,6 +120,8 @@ public static class Patch {
                case '\\': break; // "/ No newline at end of file" marks EOF
             }
          }
+         if (startLine != -1 && totalLines != -1 && (startLine + totalLines) <= file1Content?.Count)
+            sPatch.InsertRange (sPatch.Count, file1Content[(startLine + totalLines - 4)..(startLine + totalLines - 1)].Select (a => $" {a}"));
          sPatch.ForEach (a => a.Replace ("\n\r", "\n"));
       } catch {
          return ErrorGeneratingPatch;
@@ -132,7 +137,7 @@ public static class Patch {
       RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target.Path);
       RunHiddenCommandLineApp ("git.exe", $"clean -f", out _, workingdir: Target.Path);
       File.WriteAllLines ($"{Target.Path}/change1.DE.patch", sPatch);
-      results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn change1.DE.patch -v", out nExit, workingdir: Target.Path);
+      results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap change1.DE.patch -v", out nExit, workingdir: Target.Path);
       if (nExit != 0) {
          if (results.Count != 0) Errors.AddRange (results);
          return CannotApplyPatch;

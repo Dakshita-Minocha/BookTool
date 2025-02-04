@@ -113,6 +113,7 @@ public partial class MainWindow : Window {
       UpdateDoc (mLangDoc, err);
       if (err == OK) PopulateTreeView ();
       else mFileTree.ItemsSource = null;
+      mBtnApply.IsEnabled = false;
    }
 
    /// <summary>Populates Treeview with underlying directories and files.</summary>
