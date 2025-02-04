@@ -31,7 +31,8 @@
                 </StackPanel>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal">
-            <Button x:Name="mBtnApply" Content="Apply Patch" Height="25" Margin="4" Click="OnClickApply"/>
+                <Button x:Name="mBtnExport" Content="Export Patch" Height="25" Margin="4" Click="OnClickExport"/>
+                <Button x:Name="mBtnApply" Content="Apply Patch" Height="25" Margin="4" Click="OnClickApply" IsEnabled="{Binding Path=Patch.Check}"/>
             </StackPanel>
         </Grid>
         <Border Grid.RowSpan="2" Background="LightGray" Width="300">

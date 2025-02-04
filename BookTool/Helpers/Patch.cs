@@ -129,20 +129,39 @@ public static class Patch {
       return OK;
    }
 
-   public static Error Apply () {
+   public static Error SavePatchInTargetRep () {
       if (Target == null) return SetTargetRepository;
       if (sPatch is null) return CannotApplyPatch;
-      var results = RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out int nExit, workingdir: Target.Path);
       sPatch.ForEach (a => a.Replace ("\n", "\n\r"));
-      RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target.Path);
-      RunHiddenCommandLineApp ("git.exe", $"clean -f", out _, workingdir: Target.Path);
       File.WriteAllLines ($"{Target.Path}/change1.DE.patch", sPatch);
-      results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap change1.DE.patch -v", out nExit, workingdir: Target.Path);
+      return OK;
+   }
+
+   public static bool Check {
+      get {
+         if (Source == null || Target == null) return false;
+         var results = RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out int nExit, workingdir: Target.Path);
+         results = RunHiddenCommandLineApp ("git.exe", $"apply --index --check --ignore-space-change --whitespace=nowarn --allow-overlap change1.DE.patch", out _, workingdir: Target.Path);
+         if (results.Any (a => a.StartsWith ("error: "))) {
+            Errors.AddRange (results);
+            return false;
+         }
+         return true;
+      }
+   }
+
+   public static Error Apply () {
+      if (Source == null) return SetSource;
+      if (Target == null) return SetTargetRepository;
+      RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
+      RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target.Path);
+      var results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap change1.DE.patch -v", out int nExit, workingdir: Target.Path);
       if (nExit != 0) {
          if (results.Count != 0) Errors.AddRange (results);
          return CannotApplyPatch;
       }
       RunHiddenCommandLineApp ("git.exe", $"difftool --dir-diff", out _, workingdir: Target.Path);
+      if (sPatch is null) sPatch = File.ReadAllLines ($"{Target.Path}/change1.DE.patch").ToList ();
       return OK;
    }
    #endregion

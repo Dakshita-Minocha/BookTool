@@ -37,7 +37,10 @@ public partial class MainWindow : Window {
    ScrollViewer? mScroller;
    readonly int mRunHeight;
 
-   void Reset () { UpdateDoc (mLangDoc, Clear); UpdateDoc (mENDoc, Clear); mTreeViewItems.Clear (); mFileTree.Items.Clear (); mBtnApply.IsEnabled = false; mChanges.Clear (); }
+   void Reset () {
+      UpdateDoc (mLangDoc, Clear); UpdateDoc (mENDoc, Clear);
+      mTreeViewItems.Clear (); mFileTree.Items.Clear (); mChanges.Clear ();
+      if (File.Exists ($"{Target?.Path}/change1.DE.patch")) File.Delete ($"{Target.Path}/change1.DE.patch"); }
 
    void UpdateDoc (FlowDocument doc, Error err) {
       doc.Blocks.Clear ();
@@ -69,7 +72,6 @@ public partial class MainWindow : Window {
       err = ProcessPatch ();
       if (err == OK) mChanges = PatchFile;
       UpdateDoc (mENDoc, err);
-      mBtnApply.IsEnabled = true;
    }
 
    /// <summary>Navigates to user entered line number.</summary>
@@ -108,12 +110,13 @@ public partial class MainWindow : Window {
    static List<FileInfo> mTreeViewItems = [];
    static List<string> mChanges = [];
 
+   void OnClickExport (object sender, RoutedEventArgs e) => SavePatchInTargetRep ();
+
    void OnClickApply (object sender, RoutedEventArgs e) {
       var err = Apply ();
       UpdateDoc (mLangDoc, err);
       if (err == OK) PopulateTreeView ();
       else mFileTree.ItemsSource = null;
-      mBtnApply.IsEnabled = false;
    }
 
    /// <summary>Populates Treeview with underlying directories and files.</summary>
