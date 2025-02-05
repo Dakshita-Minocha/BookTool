@@ -37,21 +37,33 @@ public partial class MainWindow : Window {
    ScrollViewer? mScroller;
    readonly int mRunHeight;
 
+   void GenerateandProcessPatch () {
+      Error err;
+      if ((err = Generate ()) != OK) { UpdateDoc (mENDoc, err); return; }
+      UpdateDoc (mENDoc, Target is null ? OK : ProcessPatch ());
+   }
+
+   void ResetRep () {
+      RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target?.Path);
+   }
+
    void Reset () {
       UpdateDoc (mLangDoc, Clear); UpdateDoc (mENDoc, Clear);
-      mTreeViewItems.Clear (); mFileTree.Items.Clear (); mChanges.Clear ();
-      if (File.Exists ($"{Target?.Path}/change1.DE.patch")) File.Delete ($"{Target.Path}/change1.DE.patch"); }
+      PatchFile?.Clear ();
+      if (File.Exists ($"{Target?.Path}/change1.DE.patch")) File.Delete ($"{Target?.Path}/change1.DE.patch");
+   }
 
    void UpdateDoc (FlowDocument doc, Error err) {
       doc.Blocks.Clear ();
       var para = new Paragraph () { KeepTogether = true, TextAlignment = TextAlignment.Left };
       switch (err) {
          case OK:
-            mChanges.ForEach (line => para.Inlines.Add (new Run ($"{line}\n") {
+            if (PatchFile is null) break;
+            PatchFile.ForEach (line => para.Inlines.Add (new Run ($"{line}\n") {
                Background = line[0] is '+' ? Brushes.GreenYellow :
                             line[0] is '-' ? Brushes.Red :
                             Brushes.Transparent
-            })); mContentLoaded = true; mMaxRows = mChanges.Count + 1; break;
+            })); mContentLoaded = true; mMaxRows = PatchFile.Count + 1; break;
          case Clear: mContentLoaded = false; break;
          default: para.Inlines.Add (new Run ($"Error: {err}\n")); Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n"))); Errors.Clear (); mContentLoaded = true; break;
       }
@@ -61,17 +73,13 @@ public partial class MainWindow : Window {
 
    #region WPF Events -----------------------------------------------
    void OnMouseWheel (object sender, MouseWheelEventArgs e)
-      => mTreeScroll.ScrollToVerticalOffset (-e.Delta + mTreeScroll.VerticalOffset);
+      => mLeftTreeScroll.ScrollToVerticalOffset (-e.Delta + mLeftTreeScroll.VerticalOffset);
 
    void OnSelectionChanged (object sender, RoutedPropertyChangedEventArgs<object> e) {
       if (sender is not TreeView tv || tv.SelectedItem is not string selected) return;
       CommitID = selected.Split ("  ")[0];
       Reset ();
-      Error err;
-      if ((err = Generate ()) != OK) { UpdateDoc (mENDoc, err); return; }
-      err = ProcessPatch ();
-      if (err == OK) mChanges = PatchFile;
-      UpdateDoc (mENDoc, err);
+      GenerateandProcessPatch ();
    }
 
    /// <summary>Navigates to user entered line number.</summary>
@@ -84,9 +92,10 @@ public partial class MainWindow : Window {
 
    void OnOpenClicked (object sender, RoutedEventArgs e) {
       if (sender is not Button btn) return;
-      Reset ();
       OpenFolderDialog fd = new () { Multiselect = false, DefaultDirectory = "C:" };
-      if (fd.ShowDialog () == true) UpdateDoc (mENDoc, SetRep (btn.Name == "mOpenEN"));
+      if (fd.ShowDialog () != true) return;
+      Reset ();
+      UpdateDoc (mENDoc, SetRep (btn.Name == "mOpenEN"));
 
       // Helper Methods ---------------------------------------------
       Error SetRep (bool source) {
@@ -97,20 +106,27 @@ public partial class MainWindow : Window {
          if (source) {
             Source = rep;
             mSelectedRep.Content = folderPath;
-            RunHiddenCommandLineApp ("git.exe", $"switch {Source.Main}", out int nExit, workingdir: folderPath);
-            results = RunHiddenCommandLineApp ("git.exe", "log -n 30 --format=\"%h  %s\"", out nExit, workingdir: folderPath);
-            mCommitTree.ItemsSource = results.ToList ();
+            mCommitTree.ItemsSource = null;
+            mCommitTree.ItemsSource = GetRecentCommits (Source);
          } else {
             Target = rep;
             mTargetRep.Content = folderPath;
+            mFileTree.ItemsSource = null;
+            mFileTree.ItemsSource = GetRecentCommits (Target);
+            if (PatchFile is not null) GenerateandProcessPatch ();
          }
          return OK;
       }
+
+      List<string> GetRecentCommits (Repository rep) {
+         RunHiddenCommandLineApp ("git.exe", $"switch {rep.Main}", out _, workingdir: rep.Path);
+         return RunHiddenCommandLineApp ("git.exe", "log -n 30 --format=\"%h  %s\"", out _, workingdir: rep.Path);
+      }
    }
-   static List<FileInfo> mTreeViewItems = [];
-   static List<string> mChanges = [];
 
    void OnClickExport (object sender, RoutedEventArgs e) => SavePatchInTargetRep ();
+
+   void OnClickImport (object sender, RoutedEventArgs e) => LoadPatchFileFromRep ();
 
    void OnClickApply (object sender, RoutedEventArgs e) {
       var err = Apply ();
@@ -121,7 +137,7 @@ public partial class MainWindow : Window {
 
    /// <summary>Populates Treeview with underlying directories and files.</summary>
    void PopulateTreeView () {
-      mFileTree.Items.Clear ();
+      mFileTree.ItemsSource = null;
       var info = new DirectoryInfo (Target!.Path);
       var dir = info.GetDirectories ().Where (a => !a.Name.StartsWith ('.'));
       foreach (var folder in dir) {

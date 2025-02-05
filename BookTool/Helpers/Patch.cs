@@ -12,7 +12,7 @@ public static class Patch {
    public static Repository? Target { get; set; }
    public static string? CommitID { get; set; }
    public static List<string> Errors { get; } = [];
-   public static List<string> PatchFile => sPatch ?? [];
+   public static List<string>? PatchFile => sPatch;
    #endregion
 
    #region Methods --------------------------------------------------
@@ -55,10 +55,12 @@ public static class Patch {
             string line = sPatch[i];
             switch (line[0]) {
                case 'd':
+                  aIndex = line.IndexOf ("diff --git a/");
+                  if (aIndex == -1) { fileDeleted = true; break; }
                   if (file1Content != null && (startLine != -1 && totalLines != -1 && (startLine + totalLines) <= file1Content.Count)) {
                      sPatch.InsertRange (i, file1Content[(startLine + totalLines - 4)..(startLine + totalLines - 1)].Select (a => $" {a}"));
+                     i += 3;
                   }
-                  aIndex = line.IndexOf ("diff --git a/");
                   (startLine, totalLines) = (-1, -1);
                   var bIndex = line.IndexOf ("b/");
                   file1 = line.AsSpan (aIndex + 13, bIndex - (aIndex + 13)).Trim ();
@@ -66,7 +68,7 @@ public static class Patch {
                   newFile = sPatch[++i].StartsWith ("new file mode"); // It may be rename/copy, file will not exist in target rep in this case.
                   fileDeleted = sPatch[i].StartsWith ("deleted file mode 100644");
                   if (!newFile && string.Compare (file1.ToString (), file2.ToString ()) == 0 && !fileDeleted)
-                     file1Content = [.. File.ReadAllLines ($"{Target.Path}/{file1}")];
+                     file1Content = [.. File.ReadAllLines (Path.Join (Target.Path, file1))];
                   break;
                case '@':
                   if (file1Content is null) break;
@@ -76,32 +78,30 @@ public static class Patch {
                   }
                   // @@ -2,9 +2,8 @@ = @@ -sL,tL +sL2,tL2 @@
                   // This comes in multiple variations:
-                  // @@ -1 +1,3 @@ : file overwritten.
-                  // @@ -0,0 +1 @@ : may or may not occur in new file mode, in which case we read the num of lines added and skip those.
-
+                  
                   int sL = 1, tL = 1, sL2 = 1, tL2 = 1;
                   fileLine = 0;
                   // reading a,b:
                   int j = line.IndexOf ('-') + 1, k = j + line[j..].IndexOf (','), l = k + line.AsSpan (k).IndexOf ('+');
                   if (!int.TryParse (line.AsSpan (j, k - j), out sL)) sL = 1;
-                  if (l <= k || fileDeleted) { // @@ -1 +1,3 @@ : file overwritten.
+                  if (l <= k) { // @@ -1 +1,3 @@ : file overwritten | new file
                      int.TryParse (line.AsSpan (k), out tL);
-                     (startLine, totalLines) = (1, tL); continue;
+                     (startLine, totalLines, i) = (1, tL, i + tL + 1); continue;
                   } else int.TryParse (line[(k + 1)..l], out tL);
-                  if (fileDeleted) i += tL + 1;
+                  if (fileDeleted) { i += tL + 1; break; }
                   // reading c, d
                   j = line.IndexOf ('+') + 1; k = j + line[j..].IndexOf (','); l = k + line.AsSpan (k).IndexOf ('@');
-                  if (k <= j || newFile) { // @@ -0,0 +1 @@ : new file mode
+                  if (k <= j || newFile) {
                      int.TryParse (line.AsSpan (j), out tL2);
-                     i += tL2 + 1; continue; // +1 "/ No newline at end of file"
+                     i += tL2 + 1; continue; // @@ -0,0 + 1 @@ | new file mode ; +1 for "/ No newline at end of file"
                   } else int.TryParse (line[(k + 1)..l], out tL2);
                   if (!int.TryParse (line.AsSpan (j, k - j), out sL2)) sL2 = 1;
+                  if (tL > tL2) { i += tL; break; } // @@ -4,4 +4,3 @@ : line deleted
 
                   // We always consider number of lines added (d).
                   (startLine, totalLines) = (Math.Min (sL, sL2), tL2);
-
                   // adding 3 lines for context before patch
-                  if (startLine > 3) {
+                  if (startLine > 4) {
                      startLine -= 3; totalLines += 3; tL2 += 3; tL += 3;
                      sPatch.InsertRange (i + 1, file1Content[(startLine - 1)..(startLine + 2)].Select (a => $" {a}"));
                   }
@@ -112,7 +112,7 @@ public static class Patch {
                case '+': break;
                case '-':
                   if (file1Content is null) break;
-                  if (startLine != -1 && totalLines != -1 && fileLine < startLine - 1 + totalLines) sPatch[i] = '-' + file1Content[startLine - 1 + fileLine++];
+                  if (startLine != -1 && totalLines != -1 && fileLine < totalLines - 1) sPatch[i] = '-' + file1Content[startLine - 1 + fileLine++];
                   break;
                case ' ':
                   if (file1Content is null) break;
@@ -137,31 +137,22 @@ public static class Patch {
       return OK;
    }
 
-   public static bool Check {
-      get {
-         if (Source == null || Target == null) return false;
-         var results = RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out int nExit, workingdir: Target.Path);
-         results = RunHiddenCommandLineApp ("git.exe", $"apply --index --check --ignore-space-change --whitespace=nowarn --allow-overlap change1.DE.patch", out _, workingdir: Target.Path);
-         if (results.Any (a => a.StartsWith ("error: "))) {
-            Errors.AddRange (results);
-            return false;
-         }
-         return true;
-      }
+   public static Error LoadPatchFileFromRep () {
+      if (Target == null) return SetTargetRepository;
+      if (File.Exists ($"{Target.Path}/*.patch")) sPatch = [.. File.ReadAllLines ($"{Target.Path}/*.patch")];
+      return OK;
    }
 
    public static Error Apply () {
-      if (Source == null) return SetSource;
       if (Target == null) return SetTargetRepository;
       RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
-      RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target.Path);
       var results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap change1.DE.patch -v", out int nExit, workingdir: Target.Path);
       if (nExit != 0) {
-         if (results.Count != 0) Errors.AddRange (results);
+         if (results.Count != 0) Errors.AddRange ([.. results.Where (a => a.StartsWith ("error: "))]);
          return CannotApplyPatch;
       }
       RunHiddenCommandLineApp ("git.exe", $"difftool --dir-diff", out _, workingdir: Target.Path);
-      if (sPatch is null) sPatch = File.ReadAllLines ($"{Target.Path}/change1.DE.patch").ToList ();
+      sPatch ??= [.. File.ReadAllLines ($"{Target.Path}/change1.DE.patch")];
       return OK;
    }
    #endregion
