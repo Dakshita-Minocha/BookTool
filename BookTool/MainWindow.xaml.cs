@@ -39,8 +39,10 @@ public partial class MainWindow : Window {
 
    void GenerateandProcessPatch () {
       Error err;
-      if ((err = Generate ()) != OK) { UpdateDoc (mENDoc, err); return; }
-      UpdateDoc (mENDoc, Target is null ? OK : ProcessPatch ());
+      err = Generate ();
+      UpdateDoc (mENDoc, err);
+      if (Target is null) return;
+      UpdateDoc (mLangDoc, ProcessPatch ());
    }
 
    void ResetRep () {
@@ -94,8 +96,10 @@ public partial class MainWindow : Window {
       if (sender is not Button btn) return;
       OpenFolderDialog fd = new () { Multiselect = false, DefaultDirectory = "C:" };
       if (fd.ShowDialog () != true) return;
-      Reset ();
-      UpdateDoc (mENDoc, SetRep (btn.Name == "mOpenEN"));
+      bool setSource = btn.Name == "mOpenEN";
+      SetRep (setSource);
+      if (setSource) UpdateDoc (mENDoc, OK);
+      else UpdateDoc (mLangDoc, OK);
 
       // Helper Methods ---------------------------------------------
       Error SetRep (bool source) {
@@ -104,6 +108,7 @@ public partial class MainWindow : Window {
          var results = RunHiddenCommandLineApp ("git.exe", $"branch", out _, workingdir: folderPath);
          Repository rep = new (folderPath, results.Select (a => a.ToString ()).First (a => a.Contains ("main") || a.Contains ("master")).Trim ('*'));
          if (source) {
+            Reset ();
             Source = rep;
             mSelectedRep.Content = folderPath;
             mCommitTree.ItemsSource = null;
@@ -113,7 +118,7 @@ public partial class MainWindow : Window {
             mTargetRep.Content = folderPath;
             mFileTree.ItemsSource = null;
             mFileTree.ItemsSource = GetRecentCommits (Target);
-            if (PatchFile is not null) GenerateandProcessPatch ();
+            if (PatchFile is not null) UpdateDoc (mLangDoc, ProcessPatch ());
          }
          return OK;
       }
