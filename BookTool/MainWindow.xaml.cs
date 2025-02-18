@@ -116,7 +116,7 @@ public partial class MainWindow : Window {
          } else {
             Target = rep;
             mTargetRep.Content = folderPath;
-            mFileTree.ItemsSource = null;
+            mFileTree.ItemsSource = null; mFileTree.Items.Clear ();
             mFileTree.ItemsSource = GetRecentCommits (Target);
             if (PatchFile is not null) UpdateDoc (mLangDoc, ProcessPatch ());
          }
