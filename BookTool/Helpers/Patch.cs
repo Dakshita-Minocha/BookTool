@@ -2,7 +2,6 @@
 using System.IO;
 using System.Reflection;
 using System.Text;
-using System.Xml.Linq;
 using static BookTool.Error;
 namespace BookTool;
 
@@ -50,7 +49,7 @@ public static class Patch {
       if (sPatch == null) return ErrorGeneratingPatch;
       List<string>? file1Content = null;
       ReadOnlySpan<char> file1;
-      int startLine = -1, totalLines = -1, aIndex, fileLine = 0;
+      int startLine = -1, totalLines = -1, aIndex, fileIdx = 0;
       bool newFile = false, fileDeleted = false, rename;
       try {
          for (int i = 0; i < sPatch.Count; i++) {
@@ -69,22 +68,22 @@ public static class Patch {
                   file1Content = [.. File.ReadAllLines (Path.Join (Target.Path, file1))];
                   break;
                case '@':
-                  fileLine = 0;
                   var (sL, tL, sL2, tL2) = ParseLine (line);
                   if (fileDeleted) { i += tL + 1; break; }
                   if (tL > tL2) { i += tL; break; }
                   (startLine, totalLines) = (Math.Min (sL, sL2), tL2);
+                  fileIdx = startLine - 1;
                   if (file1Content != null && startLine > 1)
-                     sPatch[i] = $"{sPatch[i][..(sPatch[i].LastIndexOf ('@') + 1)]} {file1Content[startLine - 2]}";
+                     sPatch[i] = $"{sPatch[i][..(sPatch[i].LastIndexOf ('@') + 1)]} {file1Content[fileIdx - 1]}";
                   break;
                case '+': break;
                case '-':
                   if (file1Content is null) break;
-                  if (startLine != -1 && totalLines != -1 && fileLine < totalLines - 1) sPatch[i] = '-' + file1Content[startLine - 1 + fileLine++];
+                  if (startLine != -1 && totalLines != -1 && fileIdx < startLine + totalLines) sPatch[i] = '-' + file1Content[fileIdx++];
                   break;
                case ' ':
                   if (file1Content is null) break;
-                  if (startLine != -1 && totalLines != -1 && fileLine < startLine - 1 + totalLines - 1) sPatch[i] = ' ' + file1Content[startLine - 1 + fileLine++]; break;
+                  if (startLine != -1 && totalLines != -1 && fileIdx < startLine + totalLines) sPatch[i] = ' ' + file1Content[fileIdx++]; break;
                case '\\': break;
             }
          }
