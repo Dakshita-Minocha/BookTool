@@ -7,7 +7,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using static BookTool.Error;
-using static BookTool.Patch;
+using static BookTool.Sew;
 using Path = System.IO.Path;
 namespace BookTool;
 
