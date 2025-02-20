@@ -40,10 +40,21 @@ public partial class MainWindow : Window {
    void GenerateandProcessPatch () {
       Error err;
       err = Generate ();
+      CurrentPatch = Sew.Patch;
       UpdateDoc (mENDoc, err);
       if (Target is null) return;
       UpdateDoc (mLangDoc, ProcessPatch ());
    }
+
+   Patch? CurrentPatch {
+      get { mPatchFile = Sew.Patch?.GetReadableFile (); return Sew.Patch; }
+      set {
+         mCurrentPatch = value;
+         mPatchFile = value?.GetReadableFile ();
+      }
+   }
+   Patch? mCurrentPatch;
+   string[]? mPatchFile;
 
    void ResetRep () {
       RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target?.Path);
@@ -51,7 +62,7 @@ public partial class MainWindow : Window {
 
    void Reset () {
       UpdateDoc (mLangDoc, Clear); UpdateDoc (mENDoc, Clear);
-      PatchFile?.Clear ();
+      CurrentPatch = null;
       if (File.Exists ($"{Target?.Path}/change1.DE.patch")) File.Delete ($"{Target?.Path}/change1.DE.patch");
    }
 
@@ -60,12 +71,14 @@ public partial class MainWindow : Window {
       var para = new Paragraph () { KeepTogether = true, TextAlignment = TextAlignment.Left };
       switch (err) {
          case OK:
-            if (PatchFile is null) break;
-            PatchFile.ForEach (line => para.Inlines.Add (new Run ($"{line}\n") {
-               Background = line[0] is '+' ? Brushes.GreenYellow :
-                            line[0] is '-' ? Brushes.Red :
-                            Brushes.Transparent
-            })); mContentLoaded = true; mMaxRows = PatchFile.Count + 1; break;
+            if (CurrentPatch == null || mPatchFile == null) break;
+            foreach (var line in mPatchFile)
+               para.Inlines.Add (new Run ($"{line}\n") {
+                  Background = line[0] is '+' ? Brushes.GreenYellow :
+                               line[0] is '-' ? Brushes.Red :
+                               Brushes.Transparent
+               });
+            mContentLoaded = true; mMaxRows = mPatchFile.Length + 1; break;
          case Clear: mContentLoaded = false; break;
          default: para.Inlines.Add (new Run ($"Error: {err}\n")); Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n"))); Errors.Clear (); mContentLoaded = true; break;
       }
@@ -113,12 +126,13 @@ public partial class MainWindow : Window {
             mSelectedRep.Content = folderPath;
             mCommitTree.ItemsSource = null;
             mCommitTree.ItemsSource = GetRecentCommits (Source);
+            if (CurrentPatch is not null) UpdateDoc (mENDoc, ProcessPatch ());
          } else {
             Target = rep;
             mTargetRep.Content = folderPath;
             mFileTree.ItemsSource = null; mFileTree.Items.Clear ();
             mFileTree.ItemsSource = GetRecentCommits (Target);
-            if (PatchFile is not null) UpdateDoc (mLangDoc, ProcessPatch ());
+            if (CurrentPatch is not null) UpdateDoc (mLangDoc, ProcessPatch ());
          }
          return OK;
       }
