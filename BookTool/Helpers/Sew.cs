@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text;
 using static BookTool.Patch.Mode;
 using static BookTool.Error;
+using System.Security.Cryptography;
 namespace BookTool;
 
 #region Class Sew ---------------------------------------------------------------------------------
@@ -47,9 +48,8 @@ public static class Sew {
          fileContent = File.ReadAllLines (path);
          if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
          // If lines have been added, condition needs to be changed
-         for (int i = 0, j = change.StartLine - 1; i < change.Content.Count; i++) {
+         for (int i = 0, j = change.StartLine - 1; i < change.Content.Count; i++)
             if (change.Content[i][0] is not '+' and not '\\') change.Content[i] = change.Content[i][0] + $"{fileContent[j++]}";
-         }
       }
       return OK;
    }
@@ -73,7 +73,8 @@ public static class Sew {
       if (Target == null) return SetTargetRepository;
       if (sPatch == null) return SetTargetRepository;
       RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
-      File.WriteAllLines ($"{Target.Path}/{CommitID}.patch", sPatch.ConvertToPatch ().Select (a => a.Replace ("\n\r", "\n")));
+      var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path).Select (a => new KeyValuePair<string, string> ($"{a.Split ('*')[1].Trim ()}", a.Split ('*')[0].Trim ())).ToDictionary ();
+      File.WriteAllLines ($"{Target.Path}/{CommitID}.patch", sPatch.ConvertToPatch (imageMap).Select (a => a.Replace ("\n\r", "\n")));
       var results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap {CommitID}.patch -v", out int nExit, workingdir: Target.Path);
       if (nExit != 0) {
          if (results.Count != 0) Errors.AddRange ([.. results.Where (a => a.StartsWith ("error: "))]);
@@ -173,7 +174,7 @@ public record Patch () {
    #endregion
 
    #region Methods --------------------------------------------------
-   public string[] ConvertToPatch () {
+   public string[] ConvertToPatch (Dictionary<string, string> imageMap) {
       List<string> outFile = [];
       var groups = Changes.GroupBy (a => a.File);
       int count = groups.Count ();
@@ -190,7 +191,12 @@ public record Patch () {
             case Delete:
                outFile.Add ($"diff --git a/{firstChange.File.Trim ()} b/{firstChange.File.Trim ()}");
                outFile.Add ($"deleted file mode 100644\nindex 0000000..0000000 100644\n--- a/{firstChange.File.Trim ()}\n+++ /dev/null");
-               AddChange (element);
+               if (firstChange.File.EndsWith (".png")) {
+                  outFile.Add ($"-version https://git-lfs.github.com/spec/v1\n" +
+                     $"-oid sha256:{imageMap[firstChange.File]}\n" +
+                     $"-size {new FileInfo (Path.Combine (Sew.Target!.Path, firstChange.File)).Length}");
+               }
+               else AddChange (element);
                break;
             case Rename:
                outFile.Add ($"diff --git a/{firstChange.File.Trim ()} b/{firstChange.RenameTo!.Trim ()}");
@@ -272,11 +278,11 @@ public record Patch () {
                   else if (file[i + 1].StartsWith ("rename from")) mode = Rename;
                   else mode = Edit;
                   if (mode is Delete) {
-                     change = new Change (file1.ToString ()) with { Mode = mode };
+                     change = new Change (file1.ToString ().Trim ()) with { Mode = mode };
                      patch.Changes.Add (change);
                   }
                   if (mode is Rename) {
-                     change = new Change (file1.ToString ()) with { RenameTo = line[(bIndex + 2)..], Content = file[i..(i + 4)] };
+                     change = new Change (file1.ToString ().Trim ()) with { RenameTo = line[(bIndex + 2)..], Content = file[i..(i + 4)] };
                      patch.Changes.Add (change);
                   }
                   i += 3;
@@ -284,7 +290,7 @@ public record Patch () {
                case '@':
                   if (file1 == null) break;
                   if (mode is not Delete) {
-                     change = new Change (file1.ToString ()) with { Mode = mode };
+                     change = new Change (file1.ToString ().Trim ()) with { Mode = mode };
                      patch.Changes.Add (change);
                   }
                   if (change is null) break;
@@ -323,7 +329,7 @@ public record Patch () {
          if (!Enum.TryParse (file[i++].Split (':')[1].Trim (), out Mode mode)) {
             patch = null; break;
          }
-         var change = new Change (fileName) with { Mode = mode };
+         var change = new Change (fileName.Trim ()) with { Mode = mode };
          if (mode is Delete) {
             change.StartLine = 1;
             change.Content.AddRange (File.ReadAllLines (Path.Combine (Sew.Target!.Path, fileName)).Select (a => $"-{a}"));
@@ -336,7 +342,8 @@ public record Patch () {
             if (!int.TryParse (split[0].Trim ('-'), out int startLine)) {
                patch = null; break;
             }
-            change.StartLine = startLine;
+            if (mode is NewFile) { change.StartLine = 1; change.TotalLines = startLine; }
+            else change.StartLine = startLine;
             if (split.Length == 2)
                if (!int.TryParse (split[1].Trim ('-'), out int linesChanged)) {
                   patch = null; break;
@@ -356,7 +363,7 @@ public record Patch () {
             }
             change.TotalLines = count;
             patch.Changes.Add (change);
-            change = new Change (fileName) { Mode = mode };
+            change = new Change (fileName.Trim ()) { Mode = mode };
          }
       }
       return patch;
