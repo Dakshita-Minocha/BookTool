@@ -110,33 +110,33 @@ public partial class MainWindow : Window {
       OpenFolderDialog fd = new () { Multiselect = false, DefaultDirectory = "C:" };
       if (fd.ShowDialog () != true) return;
       bool setSource = btn.Name == "mOpenEN";
-      SetRep (setSource);
+      SetRep (setSource, fd.FolderName);
       if (setSource) UpdateDoc (mENDoc, OK);
       else UpdateDoc (mLangDoc, OK);
 
-      // Helper Methods ---------------------------------------------
-      Error SetRep (bool source) {
-         string folderPath = fd.FolderName;
-         if (Directory.GetDirectories (folderPath, ".git", SearchOption.TopDirectoryOnly).Length == 0) return SelectedFolderIsNotARepository;
-         var results = RunHiddenCommandLineApp ("git.exe", $"branch", out _, workingdir: folderPath);
-         Repository rep = new (folderPath, results.Select (a => a.ToString ()).First (a => a.Contains ("main") || a.Contains ("master")).Trim ('*'));
-         if (source) {
-            Reset ();
-            Source = rep;
-            mSelectedRep.Content = folderPath;
-            mCommitTree.ItemsSource = null;
-            mCommitTree.ItemsSource = GetRecentCommits (Source);
-            if (CurrentPatch is not null) UpdateDoc (mENDoc, ProcessPatch ());
-         } else {
-            Target = rep;
-            mTargetRep.Content = folderPath;
-            mFileTree.ItemsSource = null; mFileTree.Items.Clear ();
-            mFileTree.ItemsSource = GetRecentCommits (Target);
-            if (CurrentPatch is not null) UpdateDoc (mLangDoc, ProcessPatch ());
-         }
-         return OK;
-      }
+   }
 
+   Error SetRep (bool source, string folderPath) {
+      if (Directory.GetDirectories (folderPath, ".git", SearchOption.TopDirectoryOnly).Length == 0) return SelectedFolderIsNotARepository;
+      var results = RunHiddenCommandLineApp ("git.exe", $"branch", out _, workingdir: folderPath);
+      Repository rep = new (folderPath, results.Select (a => a.ToString ()).First (a => a.Contains ("main") || a.Contains ("master")).Trim ('*'));
+      if (source) {
+         Reset ();
+         Source = rep;
+         mSelectedRep.Content = folderPath;
+         mCommitTree.ItemsSource = null;
+         mCommitTree.ItemsSource = GetRecentCommits (Source);
+         if (CurrentPatch is not null) UpdateDoc (mENDoc, ProcessPatch ());
+      } else {
+         Target = rep;
+         mTargetRep.Content = folderPath;
+         mFileTree.ItemsSource = null; mFileTree.Items.Clear ();
+         mFileTree.ItemsSource = GetRecentCommits (Target);
+         if (CurrentPatch is not null) UpdateDoc (mLangDoc, ProcessPatch ());
+      }
+      return OK;
+
+      // Helper
       List<string> GetRecentCommits (Repository rep) {
          RunHiddenCommandLineApp ("git.exe", $"switch {rep.Main}", out _, workingdir: rep.Path);
          return RunHiddenCommandLineApp ("git.exe", "log -n 30 --format=\"%h  %s\"", out _, workingdir: rep.Path);
@@ -145,7 +145,13 @@ public partial class MainWindow : Window {
 
    void OnClickExport (object sender, RoutedEventArgs e) => SavePatchInTargetRep ();
 
-   void OnClickImport (object sender, RoutedEventArgs e) => LoadPatchFileFromRep ();
+   void OnClickImport (object sender, RoutedEventArgs e) {
+      OpenFileDialog fd = new () { Multiselect = false, DefaultDirectory = Target?.Path ?? "C:", Filter = "Patch files (*.patch)|*.outFile", CheckFileExists = true };
+      if (fd.ShowDialog () != true) return;
+      SetRep (false, Path.GetDirectoryName (fd.FileName)!);
+      LoadPatchFileFromRep (fd.FileName);
+      UpdateDoc (mLangDoc, OK);
+   }
 
    void OnClickApply (object sender, RoutedEventArgs e) {
       var err = Apply ();
