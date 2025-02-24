@@ -74,8 +74,8 @@ public partial class MainWindow : Window {
             if (CurrentPatch == null || mPatchFile == null) break;
             foreach (var line in mPatchFile)
                para.Inlines.Add (new Run ($"{line}\n") {
-                  Background = line[0] is '+' ? Brushes.GreenYellow :
-                               line[0] is '-' ? Brushes.Red :
+                  Background = line.FirstOrDefault () is '+' ? Brushes.GreenYellow :
+                               line.FirstOrDefault () is '-' ? Brushes.Red :
                                Brushes.Transparent
                });
             mContentLoaded = true; mMaxRows = mPatchFile.Length + 1; break;

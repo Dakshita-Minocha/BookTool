@@ -46,8 +46,10 @@ public static class Sew {
          if (!File.Exists (path)) return RepositoryMismatch;
          fileContent = File.ReadAllLines (path);
          if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
-         for (int i = 0, j = change.StartLine - 1; j < change.StartLine + change.TotalLines - 2 && i < change.Content.Count; i++)
-            if (change.Content[i][0] is not '+' or '\\') change.Content[i] = change.Content[i][0] + $"{fileContent[j++]}";
+         // If lines have been added, condition needs to be changed
+         for (int i = 0, j = change.StartLine - 1; i < change.Content.Count; i++) {
+            if (change.Content[i][0] is not '+' and not '\\') change.Content[i] = change.Content[i][0] + $"{fileContent[j++]}";
+         }
       }
       return OK;
    }
@@ -71,7 +73,7 @@ public static class Sew {
       if (Target == null) return SetTargetRepository;
       if (sPatch == null) return SetTargetRepository;
       RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
-      File.WriteAllLines ($"{Target.Path}/{CommitID}.patch", sPatch.ConvertToPatch ());
+      File.WriteAllLines ($"{Target.Path}/{CommitID}.patch", sPatch.ConvertToPatch ().Select (a => a.Replace ("\n\r", "\n")));
       var results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap {CommitID}.patch -v", out int nExit, workingdir: Target.Path);
       if (nExit != 0) {
          if (results.Count != 0) Errors.AddRange ([.. results.Where (a => a.StartsWith ("error: "))]);
@@ -226,7 +228,10 @@ public record Patch () {
          switch (mode) {
             case NewFile:
                outFile.Add ($"Lines: {element.First ().TotalLines}");
-               foreach (var change in element) outFile.AddRange (change.Content);
+               foreach (var change in element) {
+                  outFile.Add (change.AdditionalContext);
+                  outFile.AddRange (change.Content);
+               }
                break;
             case Delete:
                break;
@@ -236,7 +241,7 @@ public record Patch () {
             case Edit:
                foreach (var change in element) {
                   outFile.Add ($"Line: {change.StartLine}{(change.WasTotalChanged ? $",{change.LinesChanged} " : " ")}".PadRight (69, '-'));
-                  //outFile.Add (change.AdditionalContext);
+                  outFile.Add (change.AdditionalContext);
                   outFile.AddRange (change.Content);
                }
                break;
@@ -294,7 +299,7 @@ public record Patch () {
                      change.WasTotalChanged = true;
                      change.LinesChanged = tL2 - tL;
                   }
-                  //change.AdditionalContext = file[i++];
+                  change.AdditionalContext = line[(line.LastIndexOf ('@') + 1)..];
                   break;
                case '+': if (!line.StartsWith ("+++")) change?.Content.Add (line); break;
                case '-':
@@ -339,7 +344,7 @@ public record Patch () {
                   change.WasTotalChanged = true;
                   change.LinesChanged = linesChanged;
                }
-            //change.AdditionalContext = file[i];
+            change.AdditionalContext = file[i++];
             int count = 0;
             while (i < file.Length && !file[i].StartsWith ("Line:") && !file[i].StartsWith ("File:")) {
                switch (file[i][0]) {
@@ -400,7 +405,7 @@ public record Change (string File) {
    public bool WasTotalChanged = false;
 
    /// <summary>Number of lines Changed.</summary>
-   public int LinesChanged = -1;
+   public int LinesChanged = 0;
 
    /// <summary>File Path after renaming. To be used only in Rename Mode</summary>
    public string? RenameTo;
