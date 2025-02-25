@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Text;
 using static BookTool.Patch.Mode;
 using static BookTool.Error;
-using System.Security.Cryptography;
 namespace BookTool;
 
 #region Class Sew ---------------------------------------------------------------------------------
@@ -192,7 +191,7 @@ public record Patch () {
                outFile.Add ($"diff --git a/{firstChange.File.Trim ()} b/{firstChange.File.Trim ()}");
                outFile.Add ($"deleted file mode 100644\nindex 0000000..0000000 100644\n--- a/{firstChange.File.Trim ()}\n+++ /dev/null");
                if (firstChange.File.EndsWith (".png")) {
-                  outFile.Add ($"-version https://git-lfs.github.com/spec/v1\n" +
+                  outFile.Add ($"@@ -1,3 +0,0 @@ \n-version https://git-lfs.github.com/spec/v1\n" +
                      $"-oid sha256:{imageMap[firstChange.File]}\n" +
                      $"-size {new FileInfo (Path.Combine (Sew.Target!.Path, firstChange.File)).Length}");
                }
