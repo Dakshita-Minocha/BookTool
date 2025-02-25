@@ -49,11 +49,9 @@ public partial class MainWindow : Window {
    Patch? CurrentPatch {
       get { mPatchFile = Sew.Patch?.ConvertToSew (); return Sew.Patch; }
       set {
-         mCurrentPatch = value;
          mPatchFile = value?.ConvertToSew ();
       }
    }
-   Patch? mCurrentPatch;
    string[]? mPatchFile;
 
    void ResetRep () {

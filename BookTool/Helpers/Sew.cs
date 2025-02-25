@@ -216,7 +216,7 @@ public record Patch () {
       void AddChange (IGrouping<string, Change> element) {
          foreach (var change in element) {
             outFile.Add (change.ToString ());
-            change.Content.ForEach (a => { if (a[0] != ' ') a.Insert (0, " "); a.Replace ("\n\r", "\n"); });
+            change.Content.ForEach (a => a.Replace ("\n\r", "\n"));
             outFile.AddRange (change.Content);
          }
       }
