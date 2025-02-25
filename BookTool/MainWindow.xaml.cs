@@ -7,7 +7,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using static BookTool.Error;
-using static BookTool.Patch;
+using static BookTool.Sew;
 using Path = System.IO.Path;
 namespace BookTool;
 
@@ -40,10 +40,21 @@ public partial class MainWindow : Window {
    void GenerateandProcessPatch () {
       Error err;
       err = Generate ();
+      CurrentPatch = Sew.Patch;
       UpdateDoc (mENDoc, err);
       if (Target is null) return;
       UpdateDoc (mLangDoc, ProcessPatch ());
    }
+
+   Patch? CurrentPatch {
+      get { mPatchFile = Sew.Patch?.ConvertToSew (); return Sew.Patch; }
+      set {
+         mCurrentPatch = value;
+         mPatchFile = value?.ConvertToSew ();
+      }
+   }
+   Patch? mCurrentPatch;
+   string[]? mPatchFile;
 
    void ResetRep () {
       RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target?.Path);
@@ -51,7 +62,7 @@ public partial class MainWindow : Window {
 
    void Reset () {
       UpdateDoc (mLangDoc, Clear); UpdateDoc (mENDoc, Clear);
-      PatchFile?.Clear ();
+      CurrentPatch = null;
       if (File.Exists ($"{Target?.Path}/change1.DE.patch")) File.Delete ($"{Target?.Path}/change1.DE.patch");
    }
 
@@ -60,12 +71,14 @@ public partial class MainWindow : Window {
       var para = new Paragraph () { KeepTogether = true, TextAlignment = TextAlignment.Left };
       switch (err) {
          case OK:
-            if (PatchFile is null) break;
-            PatchFile.ForEach (line => para.Inlines.Add (new Run ($"{line}\n") {
-               Background = line[0] is '+' ? Brushes.GreenYellow :
-                            line[0] is '-' ? Brushes.Red :
-                            Brushes.Transparent
-            })); mContentLoaded = true; mMaxRows = PatchFile.Count + 1; break;
+            if (CurrentPatch == null || mPatchFile == null) break;
+            foreach (var line in mPatchFile)
+               para.Inlines.Add (new Run ($"{line}\n") {
+                  Background = line.FirstOrDefault () is '+' ? Brushes.GreenYellow :
+                               line.FirstOrDefault () is '-' ? Brushes.Red :
+                               Brushes.Transparent
+               });
+            mContentLoaded = true; mMaxRows = mPatchFile.Length + 1; break;
          case Clear: mContentLoaded = false; break;
          default: para.Inlines.Add (new Run ($"Error: {err}\n")); Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n"))); Errors.Clear (); mContentLoaded = true; break;
       }
@@ -97,32 +110,33 @@ public partial class MainWindow : Window {
       OpenFolderDialog fd = new () { Multiselect = false, DefaultDirectory = "C:" };
       if (fd.ShowDialog () != true) return;
       bool setSource = btn.Name == "mOpenEN";
-      SetRep (setSource);
+      SetRep (setSource, fd.FolderName);
       if (setSource) UpdateDoc (mENDoc, OK);
       else UpdateDoc (mLangDoc, OK);
 
-      // Helper Methods ---------------------------------------------
-      Error SetRep (bool source) {
-         string folderPath = fd.FolderName;
-         if (Directory.GetDirectories (folderPath, ".git", SearchOption.TopDirectoryOnly).Length == 0) return SelectedFolderIsNotARepository;
-         var results = RunHiddenCommandLineApp ("git.exe", $"branch", out _, workingdir: folderPath);
-         Repository rep = new (folderPath, results.Select (a => a.ToString ()).First (a => a.Contains ("main") || a.Contains ("master")).Trim ('*'));
-         if (source) {
-            Reset ();
-            Source = rep;
-            mSelectedRep.Content = folderPath;
-            mCommitTree.ItemsSource = null;
-            mCommitTree.ItemsSource = GetRecentCommits (Source);
-         } else {
-            Target = rep;
-            mTargetRep.Content = folderPath;
-            mFileTree.ItemsSource = null;
-            mFileTree.ItemsSource = GetRecentCommits (Target);
-            if (PatchFile is not null) UpdateDoc (mLangDoc, ProcessPatch ());
-         }
-         return OK;
-      }
+   }
 
+   Error SetRep (bool source, string folderPath) {
+      if (Directory.GetDirectories (folderPath, ".git", SearchOption.TopDirectoryOnly).Length == 0) return SelectedFolderIsNotARepository;
+      var results = RunHiddenCommandLineApp ("git.exe", $"branch", out _, workingdir: folderPath);
+      Repository rep = new (folderPath, results.Select (a => a.ToString ()).First (a => a.Contains ("main") || a.Contains ("master")).Trim ('*'));
+      if (source) {
+         Reset ();
+         Source = rep;
+         mSelectedRep.Content = folderPath;
+         mCommitTree.ItemsSource = null;
+         mCommitTree.ItemsSource = GetRecentCommits (Source);
+         if (CurrentPatch is not null) UpdateDoc (mENDoc, ProcessPatch ());
+      } else {
+         Target = rep;
+         mTargetRep.Content = folderPath;
+         mFileTree.ItemsSource = null; mFileTree.Items.Clear ();
+         mFileTree.ItemsSource = GetRecentCommits (Target);
+         if (CurrentPatch is not null) UpdateDoc (mLangDoc, ProcessPatch ());
+      }
+      return OK;
+
+      // Helper
       List<string> GetRecentCommits (Repository rep) {
          RunHiddenCommandLineApp ("git.exe", $"switch {rep.Main}", out _, workingdir: rep.Path);
          return RunHiddenCommandLineApp ("git.exe", "log -n 30 --format=\"%h  %s\"", out _, workingdir: rep.Path);
@@ -131,7 +145,13 @@ public partial class MainWindow : Window {
 
    void OnClickExport (object sender, RoutedEventArgs e) => SavePatchInTargetRep ();
 
-   void OnClickImport (object sender, RoutedEventArgs e) => LoadPatchFileFromRep ();
+   void OnClickImport (object sender, RoutedEventArgs e) {
+      OpenFileDialog fd = new () { Multiselect = false, DefaultDirectory = Target?.Path ?? "C:", Filter = "Patch files (*.patch)|*.sew", CheckFileExists = true };
+      if (fd.ShowDialog () != true) return;
+      SetRep (false, Path.GetDirectoryName (fd.FileName)!);
+      LoadPatchFileFromRep (fd.FileName);
+      UpdateDoc (mLangDoc, OK);
+   }
 
    void OnClickApply (object sender, RoutedEventArgs e) {
       var err = Apply ();
