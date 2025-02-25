@@ -7,20 +7,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <OutDir>C:/mm/bin</OutDir>
-    <!--<PublishSingleFile>true</PublishSingleFile>-->
-    <!--<SelfContained>true</SelfContained>-->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <DebugType>embedded</DebugType>
-    <!--<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>-->
-    <!--<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>-->
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <!--<Optimize>True</Optimize>-->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <Optimize>True</Optimize>
   </PropertyGroup>
 
   <PropertyGroup>
-    <!--<PublishRelease>true</PublishRelease>-->
+    <PublishRelease>true</PublishRelease>
   </PropertyGroup>
 
 </Project>

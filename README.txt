@@ -14,7 +14,7 @@ Sew Workflow:
 
    To Generate .sew File:
       - Choose Source and Target repositories from the file explorer.
-      - Choose the LAST MERGED/TRANSLATED commit from recent commits; The generated diffs will be shown in the flow documents.
+      - Choose the LAST MERGED/TRANSLATED commit from recent commits (from the main branch); The generated diffs will be shown in the flow documents.
          - The left diff corresponds to the source repository and the right diff to the Target.
          - If target is not chosen, diff generated will be of the changes made in the source repository.
       - Click on 'Export Patch' to save CommitID.sew file in target repository.
