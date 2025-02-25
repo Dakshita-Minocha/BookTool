@@ -36,32 +36,34 @@ public static class Sew {
 
    public static Error ProcessPatch () {
       if (Source == null) return SetSource;
-      if (Target == null) return SetTargetRepository;
+      if (Target == null) return SetValidTargetRepository;
       if (sPatch == null) return ErrorGeneratingPatch;
-      string[] fileContent;
-      var changes = sPatch.Changes;
-      foreach (var change in changes) {
-         if (change.Mode is not Edit or New) continue;
-         string path = Path.Join (Target.Path, change.File);
-         if (!File.Exists (path)) continue;
-         fileContent = File.ReadAllLines (path);
-         if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
-         // If lines have been added, condition needs to be changed
-         for (int i = 0, j = change.StartLine - 1; i < change.Content.Count; i++)
-            if (change.Content[i][0] is not '+' and not '\\') change.Content[i] = change.Content[i][0] + $"{fileContent[j++]}";
-      }
+      try {
+         string[] fileContent;
+         var changes = sPatch.Changes;
+         foreach (var change in changes) {
+            if (change.Mode is not Edit or New) continue;
+            string path = Path.Join (Target.Path, change.File);
+            if (!File.Exists (path)) continue;
+            fileContent = File.ReadAllLines (path);
+            if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
+            // If lines have been added, condition needs to be changed
+            for (int i = 0, j = change.StartLine - 1; i < change.Content.Count; i++)
+               if (change.Content[i][0] is not '+' and not '\\') change.Content[i] = change.Content[i][0] + $"{fileContent[j++]}";
+         }
+      } catch { return ErrorGeneratingPatch; }
       return OK;
    }
 
    public static Error SavePatchInTargetRep () {
-      if (Target == null) return SetTargetRepository;
+      if (Target == null) return SetValidTargetRepository;
       if (sPatch is null) return CannotApplyPatch;
       File.WriteAllLines ($"{Target.Path}/{CommitID}.sew", sPatch.ConvertToSew ());
       return OK;
    }
 
    public static Error LoadPatchFileFromRep (string path) {
-      if (Target == null) return SetTargetRepository;
+      if (Target == null) return SetValidTargetRepository;
       if (File.Exists (path))
          sPatch = path.EndsWith (".patch") ? Patch.ReadFromPatch (path) : Patch.ReadFromSew (path);
       if (sPatch is not null) CommitID = Path.GetFileNameWithoutExtension (path);
@@ -69,8 +71,8 @@ public static class Sew {
    }
 
    public static Error Apply () {
-      if (Target == null) return SetTargetRepository;
-      if (sPatch == null) return SetTargetRepository;
+      if (Target == null) return CannotApplyPatch;
+      if (sPatch == null) return CannotApplyPatch;
       RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
       var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path)
                         .Select (a => { var b = a.Split ('*'); return new KeyValuePair<string, string> ($"{b[1].Trim ()}", b[0].Trim ()); }).ToDictionary ();
@@ -448,7 +450,7 @@ public record Change (string File) {
 public enum Error {
    OK = 0,
    SetSource,
-   SetTargetRepository,
+   SetValidTargetRepository,
    SelectedFolderIsNotARepository,
    NoChangesMadeAfterCommit,
    ErrorGeneratingPatch,

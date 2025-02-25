@@ -1,6 +1,7 @@
 ﻿using Microsoft.Win32;
 using System.Globalization;
 using System.IO;
+using System.Reflection.Metadata;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -73,12 +74,12 @@ public partial class MainWindow : Window {
             foreach (var line in mPatchFile)
                para.Inlines.Add (new Run ($"{line}\n") {
                   Background = line.FirstOrDefault () is '+' ? Brushes.GreenYellow :
-                               line.FirstOrDefault () is '-' ? Brushes.Red :
+                               line.FirstOrDefault () is '-' ? Brushes.Salmon :
                                Brushes.Transparent
                });
             mContentLoaded = true; mMaxRows = mPatchFile.Length + 1; break;
          case Clear: mContentLoaded = false; break;
-         default: para.Inlines.Add (new Run ($"Error: {err}\n")); Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n"))); Errors.Clear (); mContentLoaded = true; break;
+         default: para.Inlines.Add (new Run ($"Error: {err}\n") { Background = Brushes.Yellow, FontSize = 18 }); Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n"))); Errors.Clear (); mContentLoaded = true; break;
       }
       doc.Blocks.Add (para);
    }
@@ -108,10 +109,10 @@ public partial class MainWindow : Window {
       OpenFolderDialog fd = new () { Multiselect = false, DefaultDirectory = "C:" };
       if (fd.ShowDialog () != true) return;
       bool setSource = btn.Name == "mOpenEN";
-      SetRep (setSource, fd.FolderName);
-      if (setSource) UpdateDoc (mENDoc, OK);
+      Error err;
+      if ((err = SetRep (setSource, fd.FolderName)) != OK) UpdateDoc (mLangDoc, err);
+      else if (setSource) UpdateDoc (mENDoc, OK);
       else UpdateDoc (mLangDoc, OK);
-
    }
 
    Error SetRep (bool source, string folderPath) {
@@ -121,12 +122,15 @@ public partial class MainWindow : Window {
       if (source) {
          Reset ();
          Source = rep;
+         if (rep.Path == Target?.Path) return SetValidTargetRepository;
          mSelectedRep.Content = folderPath;
          mCommitTree.ItemsSource = null;
          mCommitTree.ItemsSource = GetRecentCommits (Source);
          if (CurrentPatch is not null) UpdateDoc (mENDoc, ProcessPatch ());
       } else {
+         Reset ();
          Target = rep;
+         if (rep.Path == Source?.Path) return SetValidTargetRepository;
          mTargetRep.Content = folderPath;
          mFileTree.ItemsSource = null; mFileTree.Items.Clear ();
          mFileTree.ItemsSource = GetRecentCommits (Target);
