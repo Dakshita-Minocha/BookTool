@@ -41,9 +41,9 @@ public static class Sew {
       string[] fileContent;
       var changes = sPatch.Changes;
       foreach (var change in changes) {
-         if (change.Mode is not Edit or NewFile) continue;
+         if (change.Mode is not Edit or New) continue;
          string path = Path.Join (Target.Path, change.File);
-         if (!File.Exists (path)) return RepositoryMismatch;
+         if (!File.Exists (path)) continue;
          fileContent = File.ReadAllLines (path);
          if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
          // If lines have been added, condition needs to be changed
@@ -56,14 +56,14 @@ public static class Sew {
    public static Error SavePatchInTargetRep () {
       if (Target == null) return SetTargetRepository;
       if (sPatch is null) return CannotApplyPatch;
-      File.WriteAllLines ($"{Target.Path}/{CommitID}.outFile", sPatch.GetReadableFile ());
+      File.WriteAllLines ($"{Target.Path}/{CommitID}.sew", sPatch.ConvertToSew ());
       return OK;
    }
 
    public static Error LoadPatchFileFromRep (string path) {
       if (Target == null) return SetTargetRepository;
       if (File.Exists (path))
-         sPatch = path.EndsWith (".patch") ? Patch.ReadFromPatch (path) : Patch.ReadFromExportFile (path);
+         sPatch = path.EndsWith (".patch") ? Patch.ReadFromPatch (path) : Patch.ReadFromSew (path);
       if (sPatch is not null) CommitID = Path.GetFileNameWithoutExtension (path);
       return OK;
    }
@@ -72,7 +72,8 @@ public static class Sew {
       if (Target == null) return SetTargetRepository;
       if (sPatch == null) return SetTargetRepository;
       RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
-      var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path).Select (a => new KeyValuePair<string, string> ($"{a.Split ('*')[1].Trim ()}", a.Split ('*')[0].Trim ())).ToDictionary ();
+      var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path)
+                        .Select (a => { var b = a.Split ('*'); return new KeyValuePair<string, string> ($"{b[1].Trim ()}", b[0].Trim ()); }).ToDictionary ();
       File.WriteAllLines ($"{Target.Path}/{CommitID}.patch", sPatch.ConvertToPatch (imageMap).Select (a => a.Replace ("\n\r", "\n")));
       var results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap {CommitID}.patch -v", out int nExit, workingdir: Target.Path);
       if (nExit != 0) {
@@ -165,10 +166,11 @@ public record Repository (string Path, string Main) {
 }
 #endregion
 
+
 #region Record Patch ------------------------------------------------------------------------------
+/// <summary>A patch is the sum total of all the changes in the repository. It can be assembled from a .patch or a .sew file.</summary>
 public record Patch () {
    #region Properties -----------------------------------------------
-   public string FileNameWithoutExtension = "";
    public List<Change> Changes = [];
    #endregion
 
@@ -182,7 +184,7 @@ public record Patch () {
          var firstChange = element.First ();
          var mode = firstChange.Mode;
          switch (mode) {
-            case NewFile:
+            case New:
                outFile.Add ($"diff --git a/dev/null b/{firstChange.File.Trim ()}");
                outFile.Add ($"new file mode 100644\nindex 0000000..0000000\n--- /dev/null\n+++ b/{firstChange.File.Trim ()}");
                AddChange (element);
@@ -214,13 +216,13 @@ public record Patch () {
       void AddChange (IGrouping<string, Change> element) {
          foreach (var change in element) {
             outFile.Add (change.ToString ());
-            change.Content.ForEach (a => a.Replace ("\n\r", "\n"));
+            change.Content.ForEach (a => { if (a[0] != ' ') a.Insert (0, " "); a.Replace ("\n\r", "\n"); });
             outFile.AddRange (change.Content);
          }
       }
    }
 
-   public string[] GetReadableFile () {
+   public string[] ConvertToSew () {
       List<string> outFile = [];
       var groups = Changes.GroupBy (a => a.File);
       int count = groups.Count ();
@@ -231,7 +233,7 @@ public record Patch () {
          outFile.Add ($"File: {groups.ElementAt (i).Key} ".PadRight (99, '-'));
          outFile.Add ($"Mode: {mode}");
          switch (mode) {
-            case NewFile:
+            case New:
                outFile.Add ($"Lines: {element.First ().TotalLines}");
                foreach (var change in element) {
                   outFile.Add (change.AdditionalContext);
@@ -270,19 +272,25 @@ public record Patch () {
                case 'd':
                   int aIndex = line.IndexOf ("diff --git a/"), bIndex = line.IndexOf ("b/");
                   if (aIndex != -1) {
-                     file1 = line.AsSpan (aIndex + 13, bIndex - (aIndex + 13));// i++;
+                     file1 = line.AsSpan (aIndex + 13, bIndex - (aIndex + 13));
                   }
                   if (file[i].StartsWith ("deleted file mode 100644")) mode = Delete;
-                  else if (file[i + 1].StartsWith ("new file mode")) mode = NewFile;
-                  else if (file[i + 1].StartsWith ("rename from")) mode = Rename;
+                  else if (file[i + 1].StartsWith ("new file mode")) mode = New;
+                  else if (file[i + 2].StartsWith ("rename from")) mode = Rename;
                   else mode = Edit;
                   if (mode is Delete) {
                      change = new Change (file1.ToString ().Trim ()) with { Mode = mode };
                      patch.Changes.Add (change);
                   }
                   if (mode is Rename) {
-                     change = new Change (file1.ToString ().Trim ()) with { RenameTo = line[(bIndex + 2)..], Content = file[i..(i + 4)] };
+                     change = new Change (file1.ToString ().Trim ()) with { Mode = Rename, RenameTo = line[(bIndex + 2)..], Content = file[i..(i + 4)] };
                      patch.Changes.Add (change);
+                     if (file[i + 4].StartsWith ("index")) {
+                        // File has been renamed AND has changes in it. In this case, we rename it and then make changes in edit mode.
+                        mode = Edit;
+                        file1 = change.RenameTo;
+                        i += 3;
+                     }
                   }
                   i += 3;
                   break;
@@ -298,7 +306,7 @@ public record Patch () {
                   else
                      // We always consider number of lines added (d).
                      (change.StartLine, change.TotalLines) = sL == -1 ? (1, tL) : // @@ -1 +1,3 @@ : file overwritten
-                                                          sL2 == -1 || mode is NewFile ? (1, tL2) : // @@ 0,0 +1 @@ : new file
+                                                          sL2 == -1 || mode is New ? (1, tL2) : // @@ 0,0 +1 @@ : new file
                                                           (Math.Min (sL, sL2), tL > tL2 ? tL : tL2);  // @@ -4,4 +4,3 @@ : line deleted
                   if (mode is Edit && tL != tL2) {
                      change.WasTotalChanged = true;
@@ -318,9 +326,9 @@ public record Patch () {
       return patch;
    }
 
-   public static Patch? ReadFromExportFile (string path) => ReadFromExportFile (File.ReadAllLines (path));
+   public static Patch? ReadFromSew (string path) => ReadFromSew (File.ReadAllLines (path));
 
-   public static Patch? ReadFromExportFile (IEnumerable<string> patchFile) {
+   public static Patch? ReadFromSew (IEnumerable<string> patchFile) {
       var file = patchFile.ToArray ();
       Patch? patch = new ();
       for (int i = 0; i < file.Length;) {
@@ -332,8 +340,13 @@ public record Patch () {
          if (mode is Delete) {
             change.StartLine = 1;
             change.Content.AddRange (File.ReadAllLines (Path.Combine (Sew.Target!.Path, fileName)).Select (a => $"-{a}"));
-            patch.Changes.Add (change);
+            patch?.Changes.Add (change);
             change.TotalLines = change.Content.Count;
+            continue;
+         }
+         if (mode is Rename) {
+            change.RenameTo = file[i++].Split (':')[1].Trim ();
+            patch?.Changes.Add (change);
             continue;
          }
          while (i < file.Length && file[i].StartsWith ("Line")) {
@@ -341,7 +354,7 @@ public record Patch () {
             if (!int.TryParse (split[0].Trim ('-'), out int startLine)) {
                patch = null; break;
             }
-            if (mode is NewFile) { change.StartLine = 1; change.TotalLines = startLine; }
+            if (mode is New) { change.StartLine = 1; change.TotalLines = startLine; }
             else change.StartLine = startLine;
             if (split.Length == 2)
                if (!int.TryParse (split[1].Trim ('-'), out int linesChanged)) {
@@ -357,11 +370,13 @@ public record Patch () {
                   case ' ': count++; break;
                   case '+': count++; break;
                   case '-': case '\\': break;
+                  default:
+                     file[i] = file[i].Insert (0, " "); break;
                }
                change.Content.Add (file[i++]);
             }
             change.TotalLines = count;
-            patch.Changes.Add (change);
+            patch?.Changes.Add (change);
             change = new Change (fileName.Trim ()) { Mode = mode };
          }
       }
@@ -388,7 +403,7 @@ public record Patch () {
 
    #region Nested Types ---------------------------------------------
    public enum Mode {
-      NewFile, Delete, Rename, Edit
+      New, Delete, Rename, Edit
    }
    #endregion
 }
@@ -396,28 +411,36 @@ public record Patch () {
 
 #region Record Change -----------------------------------------------------------------------------
 public record Change (string File) {
+   #region Properties -----------------------------------------------
+   /// <summary>Edit, New, Delete, Rename</summary>
    public Patch.Mode Mode;
 
    /// <summary>Patch Content</summary>
    public List<string> Content = [];
 
-   /// <summary>File Path after renaming. To be used only in Index/NewFile Mode</summary>
+   /// <summary>Line where context starts</summary>
    public int StartLine = -1;
+
+   /// <summary>Total number of lines changed.</summary>
    public int TotalLines = -1;
 
+   /// <summary>Content on StartLine - 1 in file. Used in .patch file</summary>
    public string AdditionalContext = "";
 
    /// <summary>Was the total number of lines changed?</summary>
    public bool WasTotalChanged = false;
 
-   /// <summary>Number of lines Changed.</summary>
+   /// <summary>Number of lines Changed. +ve = lines added; -ve = lines deleted</summary>
    public int LinesChanged = 0;
 
-   /// <summary>File Path after renaming. To be used only in Rename Mode</summary>
+   /// <summary>File Path after renaming. Used only in Rename Mode</summary>
    public string? RenameTo;
+   #endregion
 
-   public override string ToString () => $"@@ -{(Mode is NewFile ? "0,0" : $"{StartLine},{(WasTotalChanged ? TotalLines - LinesChanged : TotalLines)}")} " +
+   #region Overrides ------------------------------------------------
+   public override string ToString () => $"@@ -{(Mode is New ? "0,0" : $"{StartLine},{(WasTotalChanged ? TotalLines - LinesChanged : TotalLines)}")} " +
                                          $"+{(Mode is Delete ? "0,0" : $"{StartLine},{TotalLines}")} @@ {AdditionalContext}";
+   #endregion
 }
 #endregion
 

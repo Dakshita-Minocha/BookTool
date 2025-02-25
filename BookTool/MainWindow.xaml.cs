@@ -47,10 +47,10 @@ public partial class MainWindow : Window {
    }
 
    Patch? CurrentPatch {
-      get { mPatchFile = Sew.Patch?.GetReadableFile (); return Sew.Patch; }
+      get { mPatchFile = Sew.Patch?.ConvertToSew (); return Sew.Patch; }
       set {
          mCurrentPatch = value;
-         mPatchFile = value?.GetReadableFile ();
+         mPatchFile = value?.ConvertToSew ();
       }
    }
    Patch? mCurrentPatch;
@@ -146,7 +146,7 @@ public partial class MainWindow : Window {
    void OnClickExport (object sender, RoutedEventArgs e) => SavePatchInTargetRep ();
 
    void OnClickImport (object sender, RoutedEventArgs e) {
-      OpenFileDialog fd = new () { Multiselect = false, DefaultDirectory = Target?.Path ?? "C:", Filter = "Patch files (*.patch)|*.outFile", CheckFileExists = true };
+      OpenFileDialog fd = new () { Multiselect = false, DefaultDirectory = Target?.Path ?? "C:", Filter = "Patch files (*.patch)|*.sew", CheckFileExists = true };
       if (fd.ShowDialog () != true) return;
       SetRep (false, Path.GetDirectoryName (fd.FileName)!);
       LoadPatchFileFromRep (fd.FileName);
