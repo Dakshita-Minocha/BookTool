@@ -15,6 +15,7 @@ namespace BookTool;
 public partial class MainWindow : Window {
    public MainWindow () {
       InitializeComponent ();
+      Title = "SEW";
       mGTLCommand = new RelayCommand (GoToLine, ContentLoaded);
       InputBindings.Add (new KeyBinding (mGTLCommand, mGTLGesture));
       mRunHeight = (int)new FormattedText ("9999", CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
@@ -145,7 +146,11 @@ public partial class MainWindow : Window {
       }
    }
 
-   void OnClickExport (object sender, RoutedEventArgs e) => SavePatchInTargetRep ();
+   void OnClickExport (object sender, RoutedEventArgs e) {
+      Error err;
+      if ((err = SavePatchInTargetRep ()) == OK) MessageBox.Show ("File Exported");
+      else UpdateDoc (mLangDoc, err);
+   }
 
    void OnClickImport (object sender, RoutedEventArgs e) {
       OpenFileDialog fd = new () { Multiselect = false, DefaultDirectory = Target?.Path ?? "C:", Filter = "Patch files (*.patch)|*.sew", CheckFileExists = true };

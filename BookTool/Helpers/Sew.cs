@@ -29,6 +29,7 @@ public static class Sew {
       if (res.Count == 0) return NoChangesMadeAfterCommit;
       if (Patch.ReadFromPatch (res) is not Patch patch) return ErrorGeneratingPatch;
       sPatch = patch;
+      // For Debugging: File.WriteAllLines ($"{Target?.Path}/debug.file", res);
       AddContext ();
       return OK;
    }
@@ -359,7 +360,7 @@ public record Patch () {
             if (mode is New) { change.StartLine = 1; change.TotalLines = startLine; }
             else change.StartLine = startLine;
             if (split.Length == 2)
-               if (!int.TryParse (split[1].Trim ('-'), out int linesChanged)) {
+               if (!int.TryParse (split[1].TrimEnd ('-'), out int linesChanged)) {
                   patch = null; break;
                } else {
                   change.WasTotalChanged = true;
@@ -440,8 +441,8 @@ public record Change (string File) {
    #endregion
 
    #region Overrides ------------------------------------------------
-   public override string ToString () => $"@@ -{(Mode is New ? "0,0" : $"{StartLine},{(WasTotalChanged ? TotalLines - LinesChanged : TotalLines)}")} " +
-                                         $"+{(Mode is Delete ? "0,0" : $"{StartLine},{TotalLines}")} @@ {AdditionalContext}";
+   public override string ToString () => $"@@ -{(Mode is New ? "0,0" : $"{StartLine},{(WasTotalChanged ? TotalLines - (LinesChanged > 0 ? LinesChanged : 0) : TotalLines)}")} " +
+                                         $"+{(Mode is Delete ? "0,0" : $"{StartLine},{TotalLines + (LinesChanged < 0 ? LinesChanged : 0)}")} @@ {AdditionalContext}";
    #endregion
 }
 #endregion
