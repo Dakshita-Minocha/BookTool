@@ -21,7 +21,7 @@ public static class Sew {
    public static Error Generate () {
       if (Source == null) return SetSource;
       RunHiddenCommandLineApp ("git.exe", $"switch {Source.Main}", out _, workingdir: Source.Path);
-      var res = RunHiddenCommandLineApp ("git.exe", $"diff {CommitID}", out int nExit, workingdir: Source.Path);
+      var res = RunHiddenCommandLineApp ("git.exe", $"diff --text {CommitID}", out int nExit, workingdir: Source.Path);
       if (nExit != 0) {
          Errors.AddRange (res);
          return ErrorGeneratingPatch;
@@ -77,8 +77,8 @@ public static class Sew {
       RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
       var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path)
                         .Select (a => { var b = a.Split ('*'); return new KeyValuePair<string, string> ($"{b[1].Trim ()}", b[0].Trim ()); }).ToDictionary ();
-      File.WriteAllLines ($"{Target.Path}/{CommitID}.patch", sPatch.ConvertToPatch (imageMap).Select (a => a.Replace ("\n\r", "\n")));
-      var results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap {CommitID}.patch -v", out int nExit, workingdir: Target.Path);
+      File.WriteAllLines ($"{Target.Path}/{CommitID}.patch", sPatch.ConvertToPatch (imageMap).Select (a => a.ReplaceLineEndings ()));
+      var results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap --inaccurate-eof {CommitID}.patch -v", out int nExit, workingdir: Target.Path);
       if (nExit != 0) {
          if (results.Count != 0) Errors.AddRange ([.. results.Where (a => a.StartsWith ("error: "))]);
          return CannotApplyPatch;
@@ -219,7 +219,7 @@ public record Patch () {
       void AddChange (IGrouping<string, Change> element) {
          foreach (var change in element) {
             outFile.Add (change.ToString ());
-            change.Content.ForEach (a => a.Replace ("\n\r", "\n"));
+            change.Content.ForEach (a => a.ReplaceLineEndings ());
             outFile.AddRange (change.Content);
          }
       }
