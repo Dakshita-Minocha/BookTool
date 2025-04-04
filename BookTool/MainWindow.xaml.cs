@@ -1,7 +1,6 @@
 ﻿using Microsoft.Win32;
 using System.Globalization;
 using System.IO;
-using System.Reflection.Metadata;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -22,6 +21,16 @@ public partial class MainWindow : Window {
                         new Typeface (mENDoc.FontFamily.ToString ()), mENDoc.FontSize, Brushes.Black, null, 1).Height;
       Loaded += delegate {
          mScroller = (ScrollViewer)((Decorator)VisualTreeHelper.GetChild (VisualTreeHelper.GetChild (mLangDocScroll, 0), 0)).Child;
+         if (!Directory.Exists ($"{AppContext.BaseDirectory}/.Sew")) Directory.CreateDirectory ($"{AppContext.BaseDirectory}/.Sew");
+         if (File.Exists ($"{AppContext.BaseDirectory}/.Sew/memory.txt")) {
+            var pStatic = File.ReadAllLines ($"{AppContext.BaseDirectory}/.Sew/memory.txt");
+            if (!string.IsNullOrEmpty (pStatic[0])) SetRep (true, pStatic[0]);
+            if (!string.IsNullOrEmpty (pStatic[1])) SetRep (false, pStatic[1]);
+         }
+      };
+
+      Closed += delegate {
+         File.WriteAllLines ($"{AppContext.BaseDirectory}/.Sew/memory.txt", [Source?.Path??"", Target?.Path??""]);
       };
    }
    readonly RelayCommand mGTLCommand;
