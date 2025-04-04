@@ -20,7 +20,7 @@
             </Grid.RowDefinitions>
             <StackPanel Margin="4,0,0,0" Orientation="Horizontal" VerticalAlignment="Top">
                 <Button x:Name="mOpenEN" Content="Master Repository" Click="OnOpenClicked" Height="25"/>
-                <Label x:Name="mSelectedRep"/>
+                <Label x:Name="mLabelSourceRep"/>
             </StackPanel>
             <Grid Grid.Row="1">
                 <Grid.RowDefinitions>
@@ -30,7 +30,7 @@
                 <Label Content="Recent Commits:" FontSize="12"/>
                 <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1">
                     <ScrollViewer Name="mLeftTreeScroll">
-                        <TreeView x:Name="mCommitTree" SelectedItemChanged="OnSelectionChanged" BorderBrush="Transparent" Background="Transparent"
+                        <TreeView x:Name="mSourceCommitTree" SelectedItemChanged="OnSelectionChanged" TreeViewItem.Selected="OnSelected" BorderBrush="Transparent" Background="Transparent"
                               VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" FontSize="14"/>
                     </ScrollViewer>
                 </Border>
@@ -41,8 +41,8 @@
                 <FlowDocument Name="mENDoc" PagePadding="20"/>
             </FlowDocumentScrollViewer>
             <StackPanel Grid.Row="3" Orientation="Horizontal">
-                <Button x:Name="mBtnExport" Content="Import Patch" Height="25" Margin="4" Click="OnClickImport"/>
-                <Button x:Name="mBtnImport" Content="Export Patch" Height="25" Margin="4" Click="OnClickExport"/>
+                <Button x:Name="mBtnExport" Content="Export Patch" Height="25" Margin="4" Click="OnClickExport"/>
+                <Button x:Name="mBtnImport" Content="Import Patch" Height="25" Margin="4" Click="OnClickImport"/>
                 <Button x:Name="mBtnApply" Content="Apply Patch" Height="25" Margin="4" Click="OnClickApply"/>
             </StackPanel>
         </Grid>
@@ -55,7 +55,7 @@
             </Grid.RowDefinitions>
             <StackPanel Margin="4,0,0,0" Orientation="Horizontal" VerticalAlignment="Top">
                 <Button x:Name="mOpenTarget" Content="Target Repository" Click="OnOpenClicked" Height="25"/>
-                <Label x:Name="mTargetRep"/>
+                <Label x:Name="mLabelTargetRep"/>
             </StackPanel>
             <Grid Grid.Row="1">
                 <Grid.RowDefinitions>
@@ -65,7 +65,7 @@
                 <Label Content="Recent Commits:" FontSize="12"/>
                 <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1">
                     <ScrollViewer Name="mTreeScroll2" Grid.Row="1">
-                        <TreeView x:Name="mFileTree" SelectedItemChanged="OnSelectionChanged" Background="Transparent" BorderBrush="Transparent"
+                        <TreeView x:Name="mTargetCommitTree" Background="Transparent" BorderBrush="Transparent"
                               VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" FontSize="14"/>
                     </ScrollViewer>
                 </Border>
@@ -73,6 +73,9 @@
             <FlowDocumentScrollViewer Grid.Row="2" Name="mLangDocScroll" Grid.Column="1" HorizontalScrollBarVisibility="Hidden" BorderBrush="LightGray" BorderThickness="1">
                 <FlowDocument Name="mLangDoc" PagePadding="20"/>
             </FlowDocumentScrollViewer>
+            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="mReload" Content="Reload Repo" Height="25" Margin="4" Click="OnClickReload"/>
+            </StackPanel>
         </Grid>
     </Grid>
 </Window>

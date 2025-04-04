@@ -21,7 +21,7 @@ public static class Sew {
    public static Error Generate () {
       if (Source == null) return SetSource;
       RunHiddenCommandLineApp ("git.exe", $"switch {Source.Main}", out _, workingdir: Source.Path);
-      var res = RunHiddenCommandLineApp ("git.exe", $"diff --text {CommitID}", out int nExit, workingdir: Source.Path);
+      var res = RunHiddenCommandLineApp ("git.exe", $"diff -B/70% {CommitID}", out int nExit, workingdir: Source.Path);
       if (nExit != 0) {
          Errors.AddRange (res);
          return ErrorGeneratingPatch;
@@ -49,10 +49,12 @@ public static class Sew {
             fileContent = File.ReadAllLines (path);
             if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
             // If lines have been added, condition needs to be changed
-            for (int i = 0, j = change.StartLine - 1; i < change.Content.Count; i++)
+            for (int i = 0, j = change.StartLine - 1; i < change.Content.Count && j < fileContent.Length; i++)
                if (change.Content[i][0] is not '+' and not '\\') change.Content[i] = change.Content[i][0] + $"{fileContent[j++]}";
          }
-      } catch { return ErrorGeneratingPatch; }
+      } catch {
+         return ErrorGeneratingPatch;
+      }
       return OK;
    }
 
@@ -77,13 +79,16 @@ public static class Sew {
       RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
       var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path)
                         .Select (a => { var b = a.Split ('*'); return new KeyValuePair<string, string> ($"{b[1].Trim ()}", b[0].Trim ()); }).ToDictionary ();
-      File.WriteAllLines ($"{Target.Path}/{CommitID}.patch", sPatch.ConvertToPatch (imageMap).Select (a => a.ReplaceLineEndings ()));
-      var results = RunHiddenCommandLineApp ("git.exe", $"apply --ignore-space-change --whitespace=nowarn --allow-overlap --inaccurate-eof {CommitID}.patch -v", out int nExit, workingdir: Target.Path);
+      string patchFile = $"{Target.Path}/{CommitID}.patch", sewFile = $"{Target.Path}/{CommitID}.sew";
+      File.WriteAllLines (patchFile, sPatch.ConvertToPatch (imageMap).Select (a => a.ReplaceLineEndings ()));
+      var results = RunHiddenCommandLineApp ("git.exe", $"apply --whitespace=nowarn --allow-overlap --inaccurate-eof --recount {CommitID}.patch -v", out int nExit, workingdir: Target.Path);
       if (nExit != 0) {
          if (results.Count != 0) Errors.AddRange ([.. results.Where (a => a.StartsWith ("error: "))]);
          return CannotApplyPatch;
       }
       RunHiddenCommandLineApp ("git.exe", $"difftool --dir-diff", out _, workingdir: Target.Path);
+      if (File.Exists (patchFile)) File.Delete (patchFile);
+      if (File.Exists (sewFile)) File.Delete (sewFile);
       return OK;
    }
    #endregion
@@ -193,14 +198,18 @@ public record Patch () {
                AddChange (element);
                break;
             case Delete:
+               if (firstChange.File.EndsWith (".png")) continue;
                outFile.Add ($"diff --git a/{firstChange.File.Trim ()} b/{firstChange.File.Trim ()}");
                outFile.Add ($"deleted file mode 100644\nindex 0000000..0000000 100644\n--- a/{firstChange.File.Trim ()}\n+++ /dev/null");
-               if (firstChange.File.EndsWith (".png")) {
-                  outFile.Add ($"@@ -1,3 +0,0 @@ \n-version https://git-lfs.github.com/spec/v1\n" +
-                     $"-oid sha256:{imageMap[firstChange.File]}\n" +
-                     $"-size {new FileInfo (Path.Combine (Sew.Target!.Path, firstChange.File)).Length}");
-               }
-               else AddChange (element);
+               AddChange (element);
+               //if (firstChange.File.EndsWith (".png")) {
+               //   if (imageMap.TryGetValue (firstChange.File, out var sha))
+               //      outFile.Add ($"@@ -1,3 +0,0 @@ \n-version https://git-lfs.github.com/spec/v1\n" +
+               //         $"-oid sha256:{sha}\n" +
+               //         $"-size {new FileInfo (Path.Combine (Sew.Target!.Path, firstChange.File)).Length}");
+               //   else outFile.AddRange (File.ReadAllLines ($"{Sew.Target!.Path}/{firstChange.File}").Select (a => $"-{a}"));
+               //   }
+               //else 
                break;
             case Rename:
                outFile.Add ($"diff --git a/{firstChange.File.Trim ()} b/{firstChange.RenameTo!.Trim ()}");
@@ -314,6 +323,7 @@ public record Patch () {
                   if (mode is Edit && tL != tL2) {
                      change.WasTotalChanged = true;
                      change.LinesChanged = tL2 - tL;
+                     change.TotalLines = tL;
                   }
                   change.AdditionalContext = line[(line.LastIndexOf ('@') + 1)..];
                   break;
@@ -367,18 +377,19 @@ public record Patch () {
                   change.LinesChanged = linesChanged;
                }
             change.AdditionalContext = file[i++];
-            int count = 0;
+            int count = 0, minus = 0, plus = 0;
             while (i < file.Length && !file[i].StartsWith ("Line:") && !file[i].StartsWith ("File:")) {
                switch (file[i][0]) {
                   case ' ': count++; break;
-                  case '+': count++; break;
-                  case '-': case '\\': break;
+                  case '+': plus++; break;
+                  case '-': minus++; break;
+                  case '\\': break;
                   default:
                      file[i] = file[i].Insert (0, " "); break;
                }
                change.Content.Add (file[i++]);
             }
-            change.TotalLines = count;
+            change.TotalLines = count + Math.Abs (plus - minus);
             patch?.Changes.Add (change);
             change = new Change (fileName.Trim ()) { Mode = mode };
          }
@@ -424,7 +435,7 @@ public record Change (string File) {
    /// <summary>Line where context starts</summary>
    public int StartLine = -1;
 
-   /// <summary>Total number of lines changed.</summary>
+   /// <summary>Total number of lines changed (initially).</summary>
    public int TotalLines = -1;
 
    /// <summary>Content on StartLine - 1 in file. Used in .patch file</summary>
@@ -441,8 +452,8 @@ public record Change (string File) {
    #endregion
 
    #region Overrides ------------------------------------------------
-   public override string ToString () => $"@@ -{(Mode is New ? "0,0" : $"{StartLine},{(WasTotalChanged ? TotalLines - (LinesChanged > 0 ? LinesChanged : 0) : TotalLines)}")} " +
-                                         $"+{(Mode is Delete ? "0,0" : $"{StartLine},{TotalLines + (LinesChanged < 0 ? LinesChanged : 0)}")} @@ {AdditionalContext}";
+   public override string ToString () => $"@@ -{(Mode is New ? "0,0" : $"{StartLine},{TotalLines}")} " + // (WasTotalChanged ? TotalLines + (LinesChanged > 0 ? LinesChanged : 0) : TotalLines)
+                                         $"+{(Mode is Delete ? "0,0" : $"{StartLine},{TotalLines + LinesChanged}")} @@ {AdditionalContext}";
    #endregion
 }
 #endregion

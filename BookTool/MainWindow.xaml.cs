@@ -56,7 +56,7 @@ public partial class MainWindow : Window {
    }
    string[]? mPatchFile;
 
-   void ResetRep () {
+   void RestoreChanges () {
       RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target?.Path);
    }
 
@@ -80,7 +80,8 @@ public partial class MainWindow : Window {
                });
             mContentLoaded = true; mMaxRows = mPatchFile.Length + 1; break;
          case Clear: mContentLoaded = false; break;
-         default: para.Inlines.Add (new Run ($"Error: {err}\n") { Background = Brushes.Yellow, FontSize = 18 }); Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n"))); Errors.Clear (); mContentLoaded = true; break;
+         default: para.Inlines.Add (new Run ($"Error: {err}\n") { Background = Brushes.Yellow, FontSize = 18 });
+                  Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n"))); Errors.Clear (); mContentLoaded = true; break;
       }
       doc.Blocks.Add (para);
    }
@@ -124,17 +125,17 @@ public partial class MainWindow : Window {
          Reset ();
          Source = rep;
          if (rep.Path == Target?.Path) return SetValidTargetRepository;
-         mSelectedRep.Content = folderPath;
-         mCommitTree.ItemsSource = null;
-         mCommitTree.ItemsSource = GetRecentCommits (Source);
+         mLabelSourceRep.Content = folderPath;
+         mSourceCommitTree.ItemsSource = null;
+         mSourceCommitTree.ItemsSource = GetRecentCommits (Source);
          if (CurrentPatch is not null) UpdateDoc (mENDoc, ProcessPatch ());
       } else {
          Reset ();
          Target = rep;
          if (rep.Path == Source?.Path) return SetValidTargetRepository;
-         mTargetRep.Content = folderPath;
-         mFileTree.ItemsSource = null; mFileTree.Items.Clear ();
-         mFileTree.ItemsSource = GetRecentCommits (Target);
+         mLabelTargetRep.Content = folderPath;
+         mTargetCommitTree.ItemsSource = null; mTargetCommitTree.Items.Clear ();
+         mTargetCommitTree.ItemsSource = GetRecentCommits (Target);
          if (CurrentPatch is not null) UpdateDoc (mLangDoc, ProcessPatch ());
       }
       return OK;
@@ -153,7 +154,7 @@ public partial class MainWindow : Window {
    }
 
    void OnClickImport (object sender, RoutedEventArgs e) {
-      OpenFileDialog fd = new () { Multiselect = false, DefaultDirectory = Target?.Path ?? "C:", Filter = "Patch files (*.patch)|*.sew", CheckFileExists = true };
+      OpenFileDialog fd = new () { Multiselect = false, DefaultDirectory = Target?.Path ?? "C:", Filter = "Sew files (*.patch)|*.sew", CheckFileExists = true };
       if (fd.ShowDialog () != true) return;
       SetRep (false, Path.GetDirectoryName (fd.FileName)!);
       LoadPatchFileFromRep (fd.FileName);
@@ -164,22 +165,33 @@ public partial class MainWindow : Window {
       var err = Apply ();
       UpdateDoc (mLangDoc, err);
       if (err == OK) PopulateTreeView ();
-      else mFileTree.ItemsSource = null;
+      else mTargetCommitTree.ItemsSource = null;
+   }
+
+   void OnClickReload (object sender, RoutedEventArgs e) {
+      Reset ();
+      Target = null;
+      Source = null;
+      mLabelSourceRep.Content = null;
+      mLabelTargetRep.Content = null;
+      mSourceCommitTree.ItemsSource = null;
+      mTargetCommitTree.ItemsSource = null;
+      CurrentPatch = null;
    }
 
    /// <summary>Populates Treeview with underlying directories and files.</summary>
    void PopulateTreeView () {
-      mFileTree.ItemsSource = null;
+      mTargetCommitTree.ItemsSource = null;
       var info = new DirectoryInfo (Target!.Path);
       var dir = info.GetDirectories ().Where (a => !a.Name.StartsWith ('.'));
       foreach (var folder in dir) {
          var item = MakeTVI (folder.Name);
          if (Path.GetDirectoryName (folder.Name) is string path && !string.IsNullOrWhiteSpace (path)) AddSubItems (path, item);
-         if (item.HasItems) mFileTree.Items.Add (item);
+         if (item.HasItems) mTargetCommitTree.Items.Add (item);
       }
       var item2 = MakeTVI (info.Name, expanded: true);
       AddSubItems (Target.Path, item2);
-      if (item2.HasItems) mFileTree.Items.Add (item2);
+      if (item2.HasItems) mTargetCommitTree.Items.Add (item2);
    }
 
    /// <summary>Adds Sub-Directories and Files from a given file path as per specified pattern</summary>
