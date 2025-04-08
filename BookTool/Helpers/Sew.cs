@@ -3,8 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text;
-using static BookTool.Patch.Mode;
 using static BookTool.Error;
+using static BookTool.Patch.Mode;
 namespace BookTool;
 
 #region Class Sew ---------------------------------------------------------------------------------
@@ -21,7 +21,7 @@ public static class Sew {
    public static Error Generate () {
       if (Source == null) return SetSource;
       RunHiddenCommandLineApp ("git.exe", $"switch {Source.Main}", out _, workingdir: Source.Path);
-      var res = RunHiddenCommandLineApp ("git.exe", $"diff -B/70% {CommitID}", out int nExit, workingdir: Source.Path);
+      var res = RunHiddenCommandLineApp ("git.exe", $"diff {CommitID}", out int nExit, workingdir: Source.Path);
       if (nExit != 0) {
          Errors.AddRange (res);
          return ErrorGeneratingPatch;
@@ -29,12 +29,14 @@ public static class Sew {
       if (res.Count == 0) return NoChangesMadeAfterCommit;
       if (Patch.ReadFromPatch (res) is not Patch patch) return ErrorGeneratingPatch;
       sPatch = patch;
-      // For Debugging: File.WriteAllLines ($"{Target?.Path}/debug.file", res);
       AddContext ();
+      //For Debugging:
+      //File.WriteAllLines ($"{Target?.Path}/debug.file", res);
       return OK;
    }
    static Patch? sPatch;
 
+   /// <summary>Replaces the content in the patch with the corresponding lines from the targer repository.</summary>
    public static Error ProcessPatch () {
       if (Source == null) return SetSource;
       if (Target == null) return SetValidTargetRepository;
@@ -80,16 +82,71 @@ public static class Sew {
       var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path)
                         .Select (a => { var b = a.Split ('*'); return new KeyValuePair<string, string> ($"{b[1].Trim ()}", b[0].Trim ()); }).ToDictionary ();
       string patchFile = $"{Target.Path}/{CommitID}.patch", sewFile = $"{Target.Path}/{CommitID}.sew";
-      File.WriteAllLines (patchFile, sPatch.ConvertToPatch (imageMap).Select (a => a.ReplaceLineEndings ()));
-      var results = RunHiddenCommandLineApp ("git.exe", $"apply --whitespace=nowarn --allow-overlap --inaccurate-eof --recount {CommitID}.patch -v", out int nExit, workingdir: Target.Path);
-      if (nExit != 0) {
-         if (results.Count != 0) Errors.AddRange ([.. results.Where (a => a.StartsWith ("error: "))]);
-         return CannotApplyPatch;
+      Error err = OK;
+      foreach (var change in sPatch.Changes) {
+         File.WriteAllLines (patchFile, change.ToPatch ());
+         var res = ApplyImp (true);
+         // check if the current hunk applies. if it does not apply, try _______________, else add it to error list and continue.
+         if (res.nExit == 0) {
+            ApplyImp ();
+            continue;
+         } else if (res.Results.Count != 0) {
+            res = ApplyImp ();
+            if (res.nExit != 0 && res.Results.Count != 0) {
+               err = IncompletePatchApplied;
+               Errors.AddRange ([.. res.Results]);
+            }
+         }
       }
-      RunHiddenCommandLineApp ("git.exe", $"difftool --dir-diff", out _, workingdir: Target.Path);
       if (File.Exists (patchFile)) File.Delete (patchFile);
-      if (File.Exists (sewFile)) File.Delete (sewFile);
-      return OK;
+      if (err == OK && File.Exists (sewFile)) File.Delete (sewFile);
+      RunHiddenCommandLineApp ("git.exe", $"difftool --dir-diff", out _, workingdir: Target.Path);
+      return err;
+   }
+
+   static (List<string> Results, int nExit) ApplyImp (bool check = false, bool noAdd = false) =>
+      (RunHiddenCommandLineApp ("git.exe", $"apply {(check ? "--check" : "")} {(noAdd ? "--no-add" : "")} --ignore-space-change --allow-empty --ignore-whitespace --whitespace=nowarn --allow-overlap --inaccurate-eof --recount --exclude <*.png> {CommitID}.patch", out int nExit, workingdir: Target!.Path), nExit);
+
+   /// <summary>Checks if all the changes except additions from the patch apply and stores the changes to be applied when we export.</summary>
+   // Since we only need changes that are being added for translation, we keep only those in sPatch.
+   // Storing the other so we don't have to restore applied changes when the user switched between commits.
+   public static Error CheckNoAdd () {
+      if (Target == null) return CannotApplyPatch;
+      if (sPatch == null) return CannotApplyPatch;
+      RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
+      //var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path)
+      //                  .Select (a => { var b = a.Split ('*'); return new KeyValuePair<string, string> ($"{b[1].Trim ()}", b[0].Trim ()); }).ToDictionary ();
+      string patchAddress = $"{Target.Path}/{CommitID}.patch";
+      Error err = OK;
+      sNoAddChanges.Clear ();
+      for (int i = 0; i < sPatch.Changes.Count; i++) {
+         var change = sPatch.Changes[i];
+         File.WriteAllLines (patchAddress, change.ToPatch ());
+         var (results, nExit) = ApplyImp (check: true, noAdd: true);
+         if (nExit == 0) {
+            // If apply -no-add is succesful, only changes that contain additions should be left.
+            // All other changes are stored to be applied when user exports.
+            sNoAddChanges.Add ([..change.ToPatch ()]);
+            change.Content.RemoveAll (a => a[0] == '-');
+            change.TotalLines = change.Content.Count (a => a[0] == ' ');
+            change.LinesChanged = change.Content.Count (a => a[0] == '+');
+            if (change.Mode is Delete || change.Content.Count == 0 || !change.Content.Any (a => a[0] == '+')) { sPatch.Changes.Remove (change); i--; }
+         }
+      }
+      if (File.Exists (patchAddress)) File.Delete (patchAddress);
+      return err;
+   }
+   static List<string[]> sNoAddChanges = [];
+
+   public static void ApplyNoAdd () {
+      if (Target == null) return;
+      string patchAddress = $"{Target.Path}/{CommitID}.patch";
+      foreach (var change in sNoAddChanges) {
+         File.WriteAllLines (patchAddress, change);
+         var res = ApplyImp (noAdd: true);
+      }
+      if (File.Exists (patchAddress)) File.Delete (patchAddress);
+      sNoAddChanges.Clear ();
    }
    #endregion
 
@@ -183,7 +240,7 @@ public record Patch () {
    #endregion
 
    #region Methods --------------------------------------------------
-   public string[] ConvertToPatch (Dictionary<string, string> imageMap) {
+   public string[] ConvertToPatch (Dictionary<string, string>? imageMap) {
       List<string> outFile = [];
       var groups = Changes.GroupBy (a => a.File);
       int count = groups.Count ();
@@ -321,7 +378,6 @@ public record Patch () {
                                                           sL2 == -1 || mode is New ? (1, tL2) : // @@ 0,0 +1 @@ : new file
                                                           (Math.Min (sL, sL2), tL > tL2 ? tL : tL2);  // @@ -4,4 +4,3 @@ : line deleted
                   if (mode is Edit && tL != tL2) {
-                     change.WasTotalChanged = true;
                      change.LinesChanged = tL2 - tL;
                      change.TotalLines = tL;
                   }
@@ -373,7 +429,6 @@ public record Patch () {
                if (!int.TryParse (split[1].TrimEnd ('-'), out int linesChanged)) {
                   patch = null; break;
                } else {
-                  change.WasTotalChanged = true;
                   change.LinesChanged = linesChanged;
                }
             change.AdditionalContext = file[i++];
@@ -390,6 +445,8 @@ public record Patch () {
                change.Content.Add (file[i++]);
             }
             change.TotalLines = count + Math.Abs (plus - minus);
+            //change.TotalLines = count; // + Math.Abs (plus - minus) - Workingon the assumption - lines won't make it here.
+            change.LinesChanged = plus - minus;
             patch?.Changes.Add (change);
             change = new Change (fileName.Trim ()) { Mode = mode };
          }
@@ -442,7 +499,7 @@ public record Change (string File) {
    public string AdditionalContext = "";
 
    /// <summary>Was the total number of lines changed?</summary>
-   public bool WasTotalChanged = false;
+   public bool WasTotalChanged => LinesChanged == 0;
 
    /// <summary>Number of lines Changed. +ve = lines added; -ve = lines deleted</summary>
    public int LinesChanged = 0;
@@ -454,6 +511,50 @@ public record Change (string File) {
    #region Overrides ------------------------------------------------
    public override string ToString () => $"@@ -{(Mode is New ? "0,0" : $"{StartLine},{TotalLines}")} " + // (WasTotalChanged ? TotalLines + (LinesChanged > 0 ? LinesChanged : 0) : TotalLines)
                                          $"+{(Mode is Delete ? "0,0" : $"{StartLine},{TotalLines + LinesChanged}")} @@ {AdditionalContext}";
+   #endregion
+
+   #region Methods --------------------------------------------------
+   public string[] ToPatch () {
+      List<string> outFile = [];
+      switch (Mode) {
+         case New:
+            outFile.Add ($"diff --git a/dev/null b/{File.Trim ()}");
+            outFile.Add ($"new file mode 100644\nindex 0000000..0000000\n--- /dev/null\n+++ b/{File.Trim ()}");
+            AddChange ();
+            break;
+         case Delete:
+            if (File.EndsWith (".png")) return [];
+            outFile.Add ($"diff --git a/{File.Trim ()} b/{File.Trim ()}");
+            outFile.Add ($"deleted file mode 100644\nindex 0000000..0000000 100644\n--- a/{File.Trim ()}\n+++ /dev/null");
+            AddChange ();
+            //if (firstChange.File.EndsWith (".png")) {
+            //   if (imageMap.TryGetValue (firstChange.File, out var sha))
+            //      outFile.Add ($"@@ -1,3 +0,0 @@ \n-version https://git-lfs.github.com/spec/v1\n" +
+            //         $"-oid sha256:{sha}\n" +
+            //         $"-size {new FileInfo (Path.Combine (Sew.Target!.Path, firstChange.File)).Length}");
+            //   else outFile.AddRange (File.ReadAllLines ($"{Sew.Target!.Path}/{firstChange.File}").Select (a => $"-{a}"));
+            //   }
+            //else 
+            break;
+         case Rename:
+            outFile.Add ($"diff --git a/{File.Trim ()} b/{RenameTo!.Trim ()}");
+            outFile.Add ($"similarity index 100%\nrename from {File.Trim ()}\nrename to {RenameTo.Trim ()}");
+            break;
+         case Edit:
+            outFile.Add ($"diff --git a/{File.Trim ()} b/{File.Trim ()}");
+            outFile.Add ($"index 0000000..0000000 100644\n--- a/{File.Trim ()}\n+++ b/{File.Trim ()}");
+            AddChange ();
+            break;
+      }
+      return [..outFile];
+
+      // Helper
+      void AddChange () {
+         outFile.Add (ToString ());
+         Content.ForEach (a => a.ReplaceLineEndings ());
+         outFile.AddRange (Content);
+      }
+   }
    #endregion
 }
 #endregion
@@ -468,6 +569,8 @@ public enum Error {
    ErrorGeneratingPatch,
    RepositoryMismatch,
    CannotApplyPatch,
+   IncompletePatchApplied,
+   Applied3Way,
    Clear
 }
 #endregion

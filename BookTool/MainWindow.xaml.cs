@@ -67,6 +67,7 @@ public partial class MainWindow : Window {
 
    void RestoreChanges () {
       RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target?.Path);
+      UpdateDoc (mLangDoc, Clear);
    }
 
    void Reset () {
@@ -177,16 +178,8 @@ public partial class MainWindow : Window {
       else mTargetCommitTree.ItemsSource = null;
    }
 
-   void OnClickReload (object sender, RoutedEventArgs e) {
-      Reset ();
-      Target = null;
-      Source = null;
-      mLabelSourceRep.Content = null;
-      mLabelTargetRep.Content = null;
-      mSourceCommitTree.ItemsSource = null;
-      mTargetCommitTree.ItemsSource = null;
-      CurrentPatch = null;
-   }
+   void OnClickReload (object sender, RoutedEventArgs e) => Reset ();
+   void OnClickRestore (object sender, RoutedEventArgs e) => RestoreChanges ();
 
    /// <summary>Populates Treeview with underlying directories and files.</summary>
    void PopulateTreeView () {
