@@ -11,10 +11,29 @@ namespace BookTool;
 public static class Sew {
    #region Properties -----------------------------------------------
    public static Repository? Source { get; set; }
-   public static Repository? Target { get; set; }
+   public static Repository? Target {
+      get => mTarget;
+      set {
+         mTarget = value;
+         var now = DateTime.UtcNow.ToLocalTime ();
+         if (value != null)
+            sOutFile = Path.Combine ($"{value.Path}", $"{now.Date.Year}-{now.Date.Month}-{now.Date.Day} {now.Hour}.{now.Minute}.{now.Second}.sew");
+         else sOutFile = "";
+      }
+   }
+   static Repository? mTarget;
    public static string? CommitID { get; set; }
    public static List<string> Errors { get; } = [];
-   public static Patch? Patch => sPatch;
+   public static Patch? Patch {
+      get => sPatch;
+      set {
+         sPatch = value;
+         CommitID = null;
+         Errors.Clear ();
+      }
+   }
+   public static string OutFile => sOutFile;
+   static string sOutFile = "";
    #endregion
 
    #region Methods --------------------------------------------------
@@ -40,19 +59,22 @@ public static class Sew {
    public static Error ProcessPatch () {
       if (Source == null) return SetSource;
       if (Target == null) return SetValidTargetRepository;
-      if (sPatch == null) return ErrorGeneratingPatch;
+      if (sPatch == null) return PatchDoesNotExist;
       try {
          string[] fileContent;
          var changes = sPatch.Changes;
-         foreach (var change in changes) {
-            if (change.Mode is not Edit or New) continue;
-            string path = Path.Join (Target.Path, change.File);
-            if (!File.Exists (path)) continue;
-            fileContent = File.ReadAllLines (path);
-            if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
-            // If lines have been added, condition needs to be changed
-            for (int i = 0, j = change.StartLine - 1; i < change.Content.Count && j < fileContent.Length; i++)
-               if (change.Content[i][0] is not '+' and not '\\') change.Content[i] = change.Content[i][0] + $"{fileContent[j++]}";
+         var prevFile = sPatch.Changes[0].File;
+         for (int idx = 0; idx < changes.Count; idx++) {
+            var change = changes[idx];
+            if (change.Mode is Edit or New) {
+               string path = Path.Join (Target.Path, change.File);
+               if (!File.Exists (path)) continue;
+               fileContent = File.ReadAllLines (path);
+               if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
+               // If lines have been added, condition needs to be changed
+               for (int i = 0, j = change.StartLine - 1; i < change.Content.Count && j < fileContent.Length; i++)
+                  if (change.Content[i][0] is not '+' and not '\\') change.Content[i] = change.Content[i][0] + $"{fileContent[j++]}";
+            }
          }
       } catch {
          return ErrorGeneratingPatch;
@@ -62,8 +84,8 @@ public static class Sew {
 
    public static Error SavePatchInTargetRep () {
       if (Target == null) return SetValidTargetRepository;
-      if (sPatch is null) return CannotApplyPatch;
-      File.WriteAllLines ($"{Target.Path}/{CommitID}.sew", sPatch.ConvertToSew ());
+      if (sPatch is null) return PatchDoesNotExist;
+      File.WriteAllLines (OutFile, sPatch.ConvertToSew ());
       return OK;
    }
 
@@ -71,58 +93,66 @@ public static class Sew {
       if (Target == null) return SetValidTargetRepository;
       if (File.Exists (path))
          sPatch = path.EndsWith (".patch") ? Patch.ReadFromPatch (path) : Patch.ReadFromSew (path);
-      if (sPatch is not null) CommitID = Path.GetFileNameWithoutExtension (path);
       return OK;
    }
 
    public static Error Apply () {
       if (Target == null) return CannotApplyPatch;
-      if (sPatch == null) return CannotApplyPatch;
+      if (sPatch == null) return PatchDoesNotExist;
       RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
       var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path)
                         .Select (a => { var b = a.Split ('*'); return new KeyValuePair<string, string> ($"{b[1].Trim ()}", b[0].Trim ()); }).ToDictionary ();
-      string patchFile = $"{Target.Path}/{CommitID}.patch", sewFile = $"{Target.Path}/{CommitID}.sew";
+      string patchFile = Path.ChangeExtension (OutFile, ".patch");
       Error err = OK;
+      Patch notApplied = new ();
       foreach (var change in sPatch.Changes) {
          File.WriteAllLines (patchFile, change.ToPatch ());
          var res = ApplyImp (true);
-         // check if the current hunk applies. if it does not apply, try _______________, else add it to error list and continue.
+         // check if the current hunk applies. if it does not apply, try manually ???, else add it to error list and continue.
          if (res.nExit == 0) {
             ApplyImp ();
             continue;
          } else if (res.Results.Count != 0) {
             res = ApplyImp ();
             if (res.nExit != 0 && res.Results.Count != 0) {
-               err = IncompletePatchApplied;
+               err = CouldNotApplyAllChanges;
                Errors.AddRange ([.. res.Results]);
+               notApplied.Changes.Add (change);
             }
          }
       }
       if (File.Exists (patchFile)) File.Delete (patchFile);
-      if (err == OK && File.Exists (sewFile)) File.Delete (sewFile);
+      if (err == OK && File.Exists (OutFile)) File.Delete (OutFile);
+
       RunHiddenCommandLineApp ("git.exe", $"difftool --dir-diff", out _, workingdir: Target.Path);
+
+      if (notApplied.Changes.Count != 0) File.WriteAllLines ($"{Target.Path}/Failed.sew", notApplied.ConvertToSew ());
+      else if (File.Exists ($"{Target.Path}/Failed.sew")) File.Delete ($"{Target.Path}/Failed.sew");
+
       return err;
    }
 
-   static (List<string> Results, int nExit) ApplyImp (bool check = false, bool noAdd = false) =>
-      (RunHiddenCommandLineApp ("git.exe", $"apply {(check ? "--check" : "")} {(noAdd ? "--no-add" : "")} --ignore-space-change --allow-empty --ignore-whitespace --whitespace=nowarn --allow-overlap --inaccurate-eof --recount --exclude <*.png> {CommitID}.patch", out int nExit, workingdir: Target!.Path), nExit);
+   static (List<string> Results, int nExit) ApplyImp (bool check = false) =>
+      (RunHiddenCommandLineApp ("git.exe",
+      $"apply {(check ? "--check" : "")} --ignore-space-change --allow-empty --ignore-whitespace --whitespace=nowarn --allow-overlap --inaccurate-eof --recount --exclude <*.png> \"{Path.ChangeExtension (OutFile, ".patch")}\"", out int nExit, workingdir: Target!.Path),
+      nExit);
 
    /// <summary>Checks if all the changes except additions from the patch apply and stores the changes to be applied when we export.</summary>
    // Since we only need changes that are being added for translation, we keep only those in sPatch.
    // Storing the other so we don't have to restore applied changes when the user switched between commits.
    public static Error CheckNoAdd () {
       if (Target == null) return CannotApplyPatch;
-      if (sPatch == null) return CannotApplyPatch;
+      if (sPatch == null) return PatchDoesNotExist;
       RunHiddenCommandLineApp ("git.exe", $"switch {Target.Main}", out _, workingdir: Target.Path);
       //var imageMap = RunHiddenCommandLineApp ("git.exe", $"lfs ls-files --long", out _, workingdir: Target.Path)
       //                  .Select (a => { var b = a.Split ('*'); return new KeyValuePair<string, string> ($"{b[1].Trim ()}", b[0].Trim ()); }).ToDictionary ();
-      string patchAddress = $"{Target.Path}/{CommitID}.patch";
+      string patchAddress = Path.ChangeExtension (OutFile, ".patch");
       Error err = OK;
       sNoAddChanges.Clear ();
       for (int i = 0; i < sPatch.Changes.Count; i++) {
          var change = sPatch.Changes[i];
          File.WriteAllLines (patchAddress, change.ToPatch ());
-         var (results, nExit) = ApplyImp (check: true, noAdd: true);
+         var (results, nExit) = ApplyImp (check: true);
          if (nExit == 0) {
             // If apply -no-add is succesful, only changes that contain additions should be left.
             // All other changes are stored to be applied when user exports.
@@ -140,10 +170,10 @@ public static class Sew {
 
    public static void ApplyNoAdd () {
       if (Target == null) return;
-      string patchAddress = $"{Target.Path}/{CommitID}.patch";
+      string patchAddress = Path.ChangeExtension (OutFile, ".patch");
       foreach (var change in sNoAddChanges) {
          File.WriteAllLines (patchAddress, change);
-         var res = ApplyImp (noAdd: true);
+         var res = ApplyImp ();
       }
       if (File.Exists (patchAddress)) File.Delete (patchAddress);
       sNoAddChanges.Clear ();
@@ -153,7 +183,7 @@ public static class Sew {
    #region Implmentation --------------------------------------------
    static Error AddContext () {
       if (Source == null) return SetSource;
-      if (sPatch == null) return ErrorGeneratingPatch;
+      if (sPatch == null) return PatchDoesNotExist;
       var changes = sPatch.Changes.Where (a => a.Mode is Edit);
       foreach (var change in changes) {
          string path = Path.Join (Source.Path, change.File);
@@ -568,8 +598,9 @@ public enum Error {
    NoChangesMadeAfterCommit,
    ErrorGeneratingPatch,
    RepositoryMismatch,
+   PatchDoesNotExist,
    CannotApplyPatch,
-   IncompletePatchApplied,
+   CouldNotApplyAllChanges,
    Applied3Way,
    Clear
 }

@@ -61,24 +61,21 @@ public partial class MainWindow : Window {
       get { mPatchFile = Sew.Patch?.ConvertToSew (); return Sew.Patch; }
       set {
          mPatchFile = value?.ConvertToSew ();
+         Sew.Patch = value;
       }
    }
    string[]? mPatchFile;
 
-   void RestoreChanges () {
-      RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target?.Path);
-      UpdateDoc (mLangDoc, Clear);
-   }
-
    void Reset () {
       UpdateDoc (mLangDoc, Clear); UpdateDoc (mENDoc, Clear);
       CurrentPatch = null;
-      if (File.Exists ($"{Target?.Path}/change1.DE.patch")) File.Delete ($"{Target?.Path}/change1.DE.patch");
+      CommitID = null;
    }
 
    void UpdateDoc (FlowDocument doc, Error err) {
       doc.Blocks.Clear ();
       var para = new Paragraph () { KeepTogether = true, TextAlignment = TextAlignment.Left };
+      mHyperLink.Content = "";
       switch (err) {
          case OK:
             if (CurrentPatch == null || mPatchFile == null) break;
@@ -90,8 +87,17 @@ public partial class MainWindow : Window {
                });
             mContentLoaded = true; mMaxRows = mPatchFile.Length + 1; break;
          case Clear: mContentLoaded = false; break;
-         default: para.Inlines.Add (new Run ($"Error: {err}\n") { Background = Brushes.Yellow, FontSize = 18 });
-                  Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n"))); Errors.Clear (); mContentLoaded = true; break;
+         case CouldNotApplyAllChanges:
+         default:
+            para.Inlines.Add (new Run ($"Error: {err}\n") { Background = Brushes.Yellow, FontSize = 18 });
+            Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n")));
+            Errors.Clear ();
+            if (err == CouldNotApplyAllChanges) {
+               mHyperLink.Content = $"file://{Target!.Path}/Failed.Sew";
+               para.Inlines.Add (new Run ("\nLikely the content in the .sew file does not match the files in the repository.\nYou may click on the hyperlink below to see the failed patch and make the necessary changes."));
+            }
+            mContentLoaded = true;
+            break;
       }
       doc.Blocks.Add (para);
    }
@@ -103,8 +109,8 @@ public partial class MainWindow : Window {
 
    void OnSelectionChanged (object sender, RoutedPropertyChangedEventArgs<object> e) {
       if (sender is not TreeView tv || tv.SelectedItem is not string selected) return;
-      CommitID = selected.Split ("  ")[0];
       Reset ();
+      CommitID = selected.Split ("  ")[0];
       GenerateandProcessPatch ();
    }
 
@@ -131,6 +137,8 @@ public partial class MainWindow : Window {
       if (Directory.GetDirectories (folderPath, ".git", SearchOption.TopDirectoryOnly).Length == 0) return SelectedFolderIsNotARepository;
       var results = RunHiddenCommandLineApp ("git.exe", $"branch", out _, workingdir: folderPath);
       Repository rep = new (folderPath, results.Select (a => a.ToString ()).First (a => a.Contains ("main") || a.Contains ("master")).Trim ('*'));
+      UpdateDoc (mENDoc, Clear);
+      UpdateDoc (mLangDoc, Clear);
       if (source) {
          Reset ();
          Source = rep;
@@ -159,7 +167,11 @@ public partial class MainWindow : Window {
 
    void OnClickExport (object sender, RoutedEventArgs e) {
       Error err;
-      if ((err = SavePatchInTargetRep ()) == OK) MessageBox.Show ("File Exported");
+      if ((err = SavePatchInTargetRep ()) == OK)
+         if (MessageBox.Show ("Would you like to open it?", ".Sew File Exported", MessageBoxButton.YesNo) == MessageBoxResult.Yes) {
+            if (Target != null)
+               RunHiddenCommandLineApp ("\"C:\\Program Files\\Notepad++\\notepad++.exe\"", $"\"{OutFile}\"", out _, workingdir: Target.Path);
+         }
       else UpdateDoc (mLangDoc, err);
    }
 
@@ -178,8 +190,22 @@ public partial class MainWindow : Window {
       else mTargetCommitTree.ItemsSource = null;
    }
 
-   void OnClickReload (object sender, RoutedEventArgs e) => Reset ();
-   void OnClickRestore (object sender, RoutedEventArgs e) => RestoreChanges ();
+   void OnClickReload (object sender, RoutedEventArgs e) {
+      if (Source!= null) SetRep (true, Source.Path);
+      if (Target != null) SetRep (false, Target.Path);
+   }
+
+   void OnClickRestore (object sender, RoutedEventArgs e) {
+      RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target?.Path);
+      RunHiddenCommandLineApp ("git.exe", $"clean -f", out _, workingdir: Target?.Path);
+      Reset ();
+   }
+
+
+   void OnHyperLinkClicked (object sender, RoutedEventArgs e) {
+      if (Target != null)
+         RunHiddenCommandLineApp ("\"C:\\Program Files\\Notepad++\\notepad++.exe\"", $"{Target.Path}/Failed.sew", out _, workingdir: Target.Path);
+   }
 
    /// <summary>Populates Treeview with underlying directories and files.</summary>
    void PopulateTreeView () {

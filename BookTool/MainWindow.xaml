@@ -73,10 +73,13 @@
             <FlowDocumentScrollViewer Grid.Row="2" Name="mLangDocScroll" Grid.Column="1" HorizontalScrollBarVisibility="Hidden" BorderBrush="LightGray" BorderThickness="1">
                 <FlowDocument Name="mLangDoc" PagePadding="20"/>
             </FlowDocumentScrollViewer>
-            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="mRestore" Content="Restore Changes" Height="25" Margin="4" Click="OnClickRestore"/>
-                <Button x:Name="mReload" Content="Reload" Height="25" Margin="4" Click="OnClickReload"/>
-            </StackPanel>
+            <DockPanel Grid.Row="3">
+                <Label Name="mHyperLink" Foreground="Red" FontSize="16" DockPanel.Dock="Left" MouseDown="OnHyperLinkClicked" />
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                    <Button x:Name="mRestore" Content="Restore Changes" Height="25" Margin="4" Click="OnClickRestore"/>
+                    <Button x:Name="mReload" Content="Reload" Height="25" Margin="4" Click="OnClickReload"/>
+                </StackPanel>
+            </DockPanel>
         </Grid>
     </Grid>
 </Window>
