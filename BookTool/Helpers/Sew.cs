@@ -68,7 +68,6 @@ public static class Sew {
             var change = changes[idx];
             if (change.Mode is Edit or New) {
                string path = Path.Join (Target.Path, change.File);
-               if (!File.Exists (path)) continue;
                fileContent = File.ReadAllLines (path);
                if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
                // If lines have been added, condition needs to be changed

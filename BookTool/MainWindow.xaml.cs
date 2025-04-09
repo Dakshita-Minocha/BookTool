@@ -72,6 +72,17 @@ public partial class MainWindow : Window {
       CommitID = null;
    }
 
+   void OpenTextEditor (string filePath) {
+      if (mNotePadPlus == null) {
+         mNotePadPlus = File.Exists (mTextEditor);
+         if (mNotePadPlus == false) mTextEditor = "\"C:/Users/minochada/AppData/Local/Microsoft/WindowsApps/notepad.exe\"";
+      }
+      if (File.Exists (filePath))
+         RunHiddenCommandLineApp (mTextEditor, $"\"{filePath}\"", out _, workingdir: Path.IsPathRooted (filePath) ? Path.GetDirectoryName (filePath) : AppContext.BaseDirectory);
+   }
+   bool? mNotePadPlus;
+   string mTextEditor = "C:/Program Files/Notepad++/notepad++.exe";
+
    void UpdateDoc (FlowDocument doc, Error err) {
       doc.Blocks.Clear ();
       var para = new Paragraph () { KeepTogether = true, TextAlignment = TextAlignment.Left };
@@ -94,7 +105,9 @@ public partial class MainWindow : Window {
             Errors.Clear ();
             if (err == CouldNotApplyAllChanges) {
                mHyperLink.Content = $"file://{Target!.Path}/Failed.Sew";
-               para.Inlines.Add (new Run ("\nLikely the content in the .sew file does not match the files in the repository.\nYou may click on the hyperlink below to see the failed patch and make the necessary changes."));
+               para.Inlines.Add (new Run ("\nLikely the content in the .sew file does not match the files in the repository.\nYou can:\n" +
+                  "1. Restore changes and try again\n" +
+                  "2. Edit Failed.Sew and match context, then try again."));
             }
             mContentLoaded = true;
             break;
@@ -134,6 +147,7 @@ public partial class MainWindow : Window {
    }
 
    Error SetRep (bool source, string folderPath) {
+      folderPath = Path.TrimEndingDirectorySeparator (folderPath).Replace (Path.DirectorySeparatorChar, '/');
       if (Directory.GetDirectories (folderPath, ".git", SearchOption.TopDirectoryOnly).Length == 0) return SelectedFolderIsNotARepository;
       var results = RunHiddenCommandLineApp ("git.exe", $"branch", out _, workingdir: folderPath);
       Repository rep = new (folderPath, results.Select (a => a.ToString ()).First (a => a.Contains ("main") || a.Contains ("master")).Trim ('*'));
@@ -167,16 +181,13 @@ public partial class MainWindow : Window {
 
    void OnClickExport (object sender, RoutedEventArgs e) {
       Error err;
-      if ((err = SavePatchInTargetRep ()) == OK)
-         if (MessageBox.Show ("Would you like to open it?", ".Sew File Exported", MessageBoxButton.YesNo) == MessageBoxResult.Yes) {
-            if (Target != null)
-               RunHiddenCommandLineApp ("\"C:\\Program Files\\Notepad++\\notepad++.exe\"", $"\"{OutFile}\"", out _, workingdir: Target.Path);
-         }
+      if ((err = SavePatchInTargetRep ()) == OK &&
+         MessageBox.Show ("Would you like to open it?", ".Sew File Exported", MessageBoxButton.YesNo) == MessageBoxResult.Yes) OpenTextEditor (OutFile);
       else UpdateDoc (mLangDoc, err);
    }
 
    void OnClickImport (object sender, RoutedEventArgs e) {
-      OpenFileDialog fd = new () { Multiselect = false, DefaultDirectory = Target?.Path ?? "C:", Filter = "Sew files (*.patch)|*.sew", CheckFileExists = true };
+      OpenFileDialog fd = new () { Multiselect = false, DefaultDirectory = Path.GetFullPath (Target?.Path ?? "C:"), Filter = "Sew files (*.patch)|*.sew", CheckFileExists = true };
       if (fd.ShowDialog () != true) return;
       SetRep (false, Path.GetDirectoryName (fd.FileName)!);
       LoadPatchFileFromRep (fd.FileName);
@@ -202,10 +213,7 @@ public partial class MainWindow : Window {
    }
 
 
-   void OnHyperLinkClicked (object sender, RoutedEventArgs e) {
-      if (Target != null)
-         RunHiddenCommandLineApp ("\"C:\\Program Files\\Notepad++\\notepad++.exe\"", $"{Target.Path}/Failed.sew", out _, workingdir: Target.Path);
-   }
+   void OnHyperLinkClicked (object sender, RoutedEventArgs e) => OpenTextEditor ($"{Target!.Path}/Failed.sew");
 
    /// <summary>Populates Treeview with underlying directories and files.</summary>
    void PopulateTreeView () {
