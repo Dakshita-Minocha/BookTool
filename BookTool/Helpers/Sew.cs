@@ -67,7 +67,7 @@ public static class Sew {
          for (int idx = 0; idx < changes.Count; idx++) {
             var change = changes[idx];
             if (change.Mode is Edit or New) {
-               string path = Path.Join (Target.Path, change.File);
+               string path = Path.Join (Target.Path, string.IsNullOrEmpty (change.RenameFrom) ? change.File : change.RenameFrom);
                fileContent = File.ReadAllLines (path);
                if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];
                // If lines have been added, condition needs to be changed
@@ -328,7 +328,7 @@ public record Patch () {
          var element = groups.ElementAt (i);
          var file = element.Key;
          var mode = element.First ().Mode;
-         outFile.Add ($"File: {groups.ElementAt (i).Key} ".PadRight (99, '-'));
+         outFile.Add ($"file://{groups.ElementAt (i).Key} ".PadRight (99, '-'));
          outFile.Add ($"Mode: {mode}");
          switch (mode) {
             case New:
@@ -360,7 +360,7 @@ public record Patch () {
    public static Patch? ReadFromPatch (IEnumerable<string> patchFile) {
       var file = patchFile.ToList ();
       Patch patch = new ();
-      ReadOnlySpan<char> file1 = "";
+      ReadOnlySpan<char> file1 = "", renamedFrom ="";
       Change? change = null;
       Mode mode = Edit;
       try {
@@ -386,6 +386,7 @@ public record Patch () {
                      if (file[i + 4].StartsWith ("index")) {
                         // File has been renamed AND has changes in it. In this case, we rename it and then make changes in edit mode.
                         mode = Edit;
+                        renamedFrom = file1;
                         file1 = change.RenameTo;
                         i += 3;
                      }
@@ -395,8 +396,9 @@ public record Patch () {
                case '@':
                   if (file1 == null) break;
                   if (mode is not Delete) {
-                     change = new Change (file1.ToString ().Trim ()) with { Mode = mode };
+                     change = new Change (file1.ToString ().Trim ()) with { Mode = mode, RenameFrom = renamedFrom.ToString () };
                      patch.Changes.Add (change);
+                     renamedFrom = "";
                   }
                   if (change is null) break;
                   var (sL, tL, sL2, tL2) = ParseLine (line);
@@ -430,7 +432,7 @@ public record Patch () {
       var file = patchFile.ToArray ();
       Patch? patch = new ();
       for (int i = 0; i < file.Length;) {
-         var fileName = file[i++].Split (':')[1].Trim ().Trim ('-');
+         var fileName = file[i++].Split (':')[1].TrimStart ('/').Trim ().Trim ('-');
          if (!Enum.TryParse (file[i++].Split (':')[1].Trim (), out Mode mode)) {
             patch = null; break;
          }
@@ -462,7 +464,7 @@ public record Patch () {
                }
             change.AdditionalContext = file[i++];
             int count = 0, minus = 0, plus = 0;
-            while (i < file.Length && !file[i].StartsWith ("Line:") && !file[i].StartsWith ("File:")) {
+            while (i < file.Length && !file[i].StartsWith ("Line:") && !file[i].StartsWith ("file://")) {
                switch (file[i][0]) {
                   case ' ': count++; break;
                   case '+': plus++; break;
@@ -535,6 +537,9 @@ public record Change (string File) {
 
    /// <summary>File Path after renaming. Used only in Rename Mode</summary>
    public string? RenameTo;
+
+   /// <summary>File Path before renaming. Used only in Rename Mode</summary>
+   public string? RenameFrom;
    #endregion
 
    #region Overrides ------------------------------------------------

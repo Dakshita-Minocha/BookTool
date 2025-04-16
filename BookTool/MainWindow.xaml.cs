@@ -208,7 +208,7 @@ public partial class MainWindow : Window {
 
    void OnClickRestore (object sender, RoutedEventArgs e) {
       RunHiddenCommandLineApp ("git.exe", $"restore .", out _, workingdir: Target?.Path);
-      RunHiddenCommandLineApp ("git.exe", $"clean -f", out _, workingdir: Target?.Path);
+      //RunHiddenCommandLineApp ("git.exe", $"clean -f", out _, workingdir: Target?.Path);
       Reset ();
    }
 
