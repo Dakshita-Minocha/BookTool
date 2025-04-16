@@ -66,7 +66,7 @@ public static class Sew {
          var prevFile = sPatch.Changes[0].File;
          for (int idx = 0; idx < changes.Count; idx++) {
             var change = changes[idx];
-            if (change.Mode is Edit or New) {
+            if (change.Mode is Edit) {
                string path = Path.Join (Target.Path, string.IsNullOrEmpty (change.RenameFrom) ? change.File : change.RenameFrom);
                fileContent = File.ReadAllLines (path);
                if (change.StartLine > 1) change.AdditionalContext = fileContent[change.StartLine - 2];

@@ -52,7 +52,7 @@ public class RunLink : Run {
    void OnHyperlinkMouseLeave (object sender, MouseEventArgs e) {
       if (sender is Run run) run.Foreground = mPrev;
    }
-   Brush mPrev;
+   Brush mPrev = Brushes.Black;
 
    void OnHyperlinkMouseEnter (object sender, MouseEventArgs e) {
       if (sender is Run run) {
