@@ -72,16 +72,9 @@ public partial class MainWindow : Window {
       CommitID = null;
    }
 
-   void OpenTextEditor (string filePath) {
-      if (mNotePadPlus == null) {
-         mNotePadPlus = File.Exists (mTextEditor);
-         if (mNotePadPlus == false) mTextEditor = "\"C:/Users/minochada/AppData/Local/Microsoft/WindowsApps/notepad.exe\"";
-      }
-      if (File.Exists (filePath))
-         RunHiddenCommandLineApp (mTextEditor, $"\"{filePath}\"", out _, workingdir: Path.IsPathRooted (filePath) ? Path.GetDirectoryName (filePath) : AppContext.BaseDirectory);
+   void OpenTextEditor (string path) {
+      Process.Start (new ProcessStartInfo (path) { UseShellExecute = true, WorkingDirectory = Source!.Path });
    }
-   bool? mNotePadPlus;
-   string mTextEditor = "C:/Program Files/Notepad++/notepad++.exe";
 
    void UpdateDoc (FlowDocument doc, Error err) {
       doc.Blocks.Clear ();
@@ -90,12 +83,20 @@ public partial class MainWindow : Window {
       switch (err) {
          case OK:
             if (CurrentPatch == null || mPatchFile == null) break;
-            foreach (var line in mPatchFile)
-               para.Inlines.Add (new Run ($"{line}\n") {
-                  Background = line.FirstOrDefault () is '+' ? Brushes.GreenYellow :
-                               line.FirstOrDefault () is '-' ? Brushes.Salmon :
-                               Brushes.Transparent
-               });
+            foreach (var line in mPatchFile) {
+               if (line.StartsWith ("file://")) {
+                  string path = Path.Combine (doc.Name == "mENDoc" ? Source!.Path : Target!.Path, line.TrimEnd ('-')[7..]);
+                  var hyperlink = new RunLink ($"{line}\n") { Tag = path, TextDecorations = TextDecorations.Underline };
+                  hyperlink.MouseDown += OnHyperlinkMouseDown;
+                  para.Inlines.Add (hyperlink);
+               }
+               else
+                  para.Inlines.Add (new Run ($"{line}\n") {
+                     Background = line.FirstOrDefault () is '+' ? Brushes.GreenYellow :
+                                  line.FirstOrDefault () is '-' ? Brushes.Salmon :
+                                  Brushes.Transparent
+                  });
+            }
             mContentLoaded = true; mMaxRows = mPatchFile.Length + 1; break;
          case Clear: mContentLoaded = false; break;
          case CouldNotApplyAllChanges:
@@ -104,7 +105,7 @@ public partial class MainWindow : Window {
             Errors.ForEach (x => para.Inlines.Add (new Run ($"{x}\n")));
             Errors.Clear ();
             if (err == CouldNotApplyAllChanges) {
-               mHyperLink.Content = $"file://{Target!.Path}/Failed.Sew";
+               mHyperLink.Content = new RunLink ("Failed.Sew") { Tag = $"file://{Target!.Path}/Failed.Sew" };
                para.Inlines.Add (new Run ("\nLikely the content in the .sew file does not match the files in the repository.\nYou can:\n" +
                   "1. Restore changes and try again\n" +
                   "2. Edit Failed.Sew and match context, then try again."));
@@ -117,24 +118,15 @@ public partial class MainWindow : Window {
    #endregion
 
    #region WPF Events -----------------------------------------------
-   void OnMouseWheel (object sender, MouseWheelEventArgs e)
-      => mLeftTreeScroll.ScrollToVerticalOffset (-e.Delta + mLeftTreeScroll.VerticalOffset);
-
-   void OnSelectionChanged (object sender, RoutedPropertyChangedEventArgs<object> e) {
-      if (sender is not TreeView tv || tv.SelectedItem is not string selected) return;
-      Reset ();
-      CommitID = selected.Split ("  ")[0];
-      GenerateandProcessPatch ();
+   #region Hyperlink Events -----------------------------------------
+   void OnHyperlinkMouseDown (object sender, MouseButtonEventArgs e) {
+      if (((Run)sender).Tag is string path && File.Exists (path)) OpenTextEditor (path);
    }
 
-   /// <summary>Navigates to user entered line number.</summary>
-   void GoToLine () {
-      mGoToLine = new GoToLine (mMaxRows) { Owner = this };
-      if (mGoToLine.ShowDialog () is true) ScrollTo (mGoToLine.LineNumber);
-   }
-   int mMaxRows;
-   GoToLine? mGoToLine;
+   void OnHyperLinkClicked (object sender, RoutedEventArgs e) => OpenTextEditor ($"{Target!.Path}/Failed.sew");
+   #endregion
 
+   #region Button Events --------------------------------------------
    void OnOpenClicked (object sender, RoutedEventArgs e) {
       if (sender is not Button btn) return;
       OpenFolderDialog fd = new () { Multiselect = false, DefaultDirectory = "C:" };
@@ -212,8 +204,30 @@ public partial class MainWindow : Window {
       Reset ();
    }
 
+   void OnClickClean (object sender, RoutedEventArgs e) {
+      RunHiddenCommandLineApp ("git.exe", $"clean -f", out _, workingdir: Target?.Path);
+   }
 
-   void OnHyperLinkClicked (object sender, RoutedEventArgs e) => OpenTextEditor ($"{Target!.Path}/Failed.sew");
+   #endregion
+
+   #region Tree Events ----------------------------------------------
+   void OnMouseWheel (object sender, MouseWheelEventArgs e)
+      => mLeftTreeScroll.ScrollToVerticalOffset (-e.Delta + mLeftTreeScroll.VerticalOffset);
+
+   void OnSelectionChanged (object sender, RoutedPropertyChangedEventArgs<object> e) {
+      if (sender is not TreeView tv || tv.SelectedItem is not string selected) return;
+      Reset ();
+      CommitID = selected.Split ("  ")[0];
+      GenerateandProcessPatch ();
+   }
+
+   /// <summary>Navigates to user entered line number.</summary>
+   void GoToLine () {
+      mGoToLine = new GoToLine (mMaxRows) { Owner = this };
+      if (mGoToLine.ShowDialog () is true) ScrollTo (mGoToLine.LineNumber);
+   }
+   int mMaxRows;
+   GoToLine? mGoToLine;
 
    /// <summary>Populates Treeview with underlying directories and files.</summary>
    void PopulateTreeView () {
@@ -265,5 +279,6 @@ public partial class MainWindow : Window {
          mContentLoaded = true;
       }
    }
+   #endregion
    #endregion
 }

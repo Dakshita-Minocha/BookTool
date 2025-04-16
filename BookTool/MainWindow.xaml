@@ -76,6 +76,7 @@
             <DockPanel Grid.Row="3">
                 <Label Name="mHyperLink" Foreground="Red" FontSize="16" DockPanel.Dock="Left" MouseDown="OnHyperLinkClicked" />
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                    <Button x:Name="mClean" Content="Force Clean" Height="25" Margin="4" Click="OnClickClean"/>
                     <Button x:Name="mRestore" Content="Restore Changes" Height="25" Margin="4" Click="OnClickRestore"/>
                     <Button x:Name="mReload" Content="Reload" Height="25" Margin="4" Click="OnClickReload"/>
                 </StackPanel>

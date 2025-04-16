@@ -4,8 +4,9 @@
 // ---------------------------------------------------------------------------      ==(  )
 // RelayCommand.cs                                                                ===  --
 // ---------------------------------------------------------------------------------------
-using System;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 namespace BookTool;
 
 #region Class RelayCommand ------------------------------------------------------------------------
@@ -29,6 +30,36 @@ public class RelayCommand : ICommand {
 
    public void Execute (object? parameter)
       => mExecute ();
+   #endregion
+}
+#endregion
+
+#region Class RunLink -----------------------------------------------------------------------------
+public class RunLink : Run {
+   #region Constructors ---------------------------------------------
+   public RunLink (string content) : base (content) {
+      MouseEnter += OnHyperlinkMouseEnter;
+      MouseLeave += OnHyperlinkMouseLeave;
+   }
+
+   public RunLink () : base () {
+      MouseEnter += OnHyperlinkMouseEnter;
+      MouseLeave += OnHyperlinkMouseLeave;
+   }
+   #endregion
+
+   #region Runlink Events -------------------------------------------
+   void OnHyperlinkMouseLeave (object sender, MouseEventArgs e) {
+      if (sender is Run run) run.Foreground = mPrev;
+   }
+   Brush mPrev;
+
+   void OnHyperlinkMouseEnter (object sender, MouseEventArgs e) {
+      if (sender is Run run) {
+         mPrev = run.Foreground;
+         run.Foreground = Brushes.Blue;
+      }
+   }
    #endregion
 }
 #endregion
