@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:BookTool"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800" WindowState="Maximized" FontFamily="Consolas" FontSize="12">
+        Title="MainWindow" Height="450" Width="800" WindowState="Maximized" FontFamily="Consolas" FontSize="12" Background="Silver">
     <Grid Margin="8">
         <Grid.ColumnDefinitions>
             <ColumnDefinition/>
@@ -18,32 +18,30 @@
                 <RowDefinition Height="0.50*"/>
                 <RowDefinition Height="0.05*"/>
             </Grid.RowDefinitions>
-            <StackPanel Margin="4,0,0,0" Orientation="Horizontal" VerticalAlignment="Top">
-                <Button x:Name="mOpenEN" Content="Master Repository" Click="OnOpenClicked" Height="25"/>
-                <Label x:Name="mLabelSourceRep"/>
-            </StackPanel>
-            <Grid Grid.Row="1">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="0.2*"/>
-                    <RowDefinition/>
-                </Grid.RowDefinitions>
-                <Label Content="Recent Commits:" FontSize="12"/>
-                <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1">
-                    <ScrollViewer Name="mLeftTreeScroll">
-                        <TreeView x:Name="mSourceCommitTree" SelectedItemChanged="OnSelectionChanged" TreeViewItem.Selected="OnSelected" BorderBrush="Transparent" Background="Transparent"
-                              VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" FontSize="14"/>
-                    </ScrollViewer>
+            <DockPanel LastChildFill="True">
+                <Button x:Name="mOpenEN" Content="Master Repository" Click="OnOpenClicked" DockPanel.Dock="Left"/>
+                <Label x:Name="mLabelSourceRep" VerticalAlignment="Center" Padding="4" Margin="4, 0, 0, 0"/>
+            </DockPanel>
+            <DockPanel Grid.Row="1" Margin="0,0,4,4">
+                <Label Content="Recent Commits:" DockPanel.Dock="Top"/>
+                <Border BorderBrush="Gray" BorderThickness="1">
+                <ScrollViewer Name="mLeftTreeScroll" Background="LightGray">
+                    <TreeView x:Name="mSourceCommitTree" SelectedItemChanged="OnSelectionChanged" TreeViewItem.Selected="OnSelected" BorderBrush="#00000000"
+                              VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" FontSize="14" Background="Transparent"/>
+                </ScrollViewer>
                 </Border>
-                <!-- Setting VirtualizingPanel properties to help improve TreeView performance
+            </DockPanel>
+            <!-- Setting VirtualizingPanel properties to help improve TreeView performance
         See https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/how-to-improve-the-performance-of-a-treeview?view=netframeworkdesktop-4.8-->
-            </Grid>
-            <FlowDocumentScrollViewer Grid.Row="2" Name="mENDocScroll" HorizontalScrollBarVisibility="Hidden" BorderBrush="LightGray" BorderThickness="1">
-                <FlowDocument Name="mENDoc" PagePadding="20"/>
-            </FlowDocumentScrollViewer>
+            <Border Grid.Row="2" BorderBrush="Gray" BorderThickness="1" Margin="0,0,4,0" Background="LightGray">
+                <FlowDocumentScrollViewer Name="mENDocScroll" HorizontalScrollBarVisibility="Hidden" >
+                    <FlowDocument Name="mENDoc" PagePadding="20"/>
+                </FlowDocumentScrollViewer>
+            </Border>
             <StackPanel Grid.Row="3" Orientation="Horizontal">
-                <Button x:Name="mBtnExport" Content="Export Patch" Height="25" Margin="4" Click="OnClickExport"/>
-                <Button x:Name="mBtnImport" Content="Import Patch" Height="25" Margin="4" Click="OnClickImport"/>
-                <Button x:Name="mBtnApply" Content="Apply Patch" Height="25" Margin="4" Click="OnClickApply"/>
+                <Button x:Name="mBtnExport" Content="Export Patch" Margin="4" Click="OnClickExport"/>
+                <Button x:Name="mBtnImport" Content="Import Patch" Margin="4" Click="OnClickImport"/>
+                <Button x:Name="mBtnApply" Content="Apply Patch" Margin="4" Click="OnClickApply"/>
             </StackPanel>
         </Grid>
         <Grid Grid.Column="1">
@@ -53,32 +51,30 @@
                 <RowDefinition Height="0.50*"/>
                 <RowDefinition Height="0.05*"/>
             </Grid.RowDefinitions>
-            <StackPanel Margin="4,0,0,0" Orientation="Horizontal" VerticalAlignment="Top">
-                <Button x:Name="mOpenTarget" Content="Target Repository" Click="OnOpenClicked" Height="25"/>
-                <Label x:Name="mLabelTargetRep"/>
-            </StackPanel>
-            <Grid Grid.Row="1">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="0.2*"/>
-                    <RowDefinition/>
-                </Grid.RowDefinitions>
-                <Label Content="Recent Commits:" FontSize="12"/>
-                <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1">
-                    <ScrollViewer Name="mTreeScroll2" Grid.Row="1">
+            <DockPanel LastChildFill="True">
+                <Button x:Name="mOpenTarget" Content="Target Repository" Click="OnOpenClicked" Height="25" DockPanel.Dock="Left"/>
+                <Label x:Name="mLabelTargetRep" VerticalAlignment="Center" Padding="4" Margin="4, 0, 0, 0"/>
+            </DockPanel>
+            <DockPanel Grid.Row="1" Margin="0,0,4,4">
+                <Label Content="Recent Commits:" DockPanel.Dock="Top"/>
+                <Border BorderBrush="Gray" BorderThickness="1">
+                    <ScrollViewer Name="mTreeScroll2" Grid.Row="1" Background="LightGray" BorderBrush="Gray">
                         <TreeView x:Name="mTargetCommitTree" Background="Transparent" BorderBrush="Transparent"
                               VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" FontSize="14"/>
                     </ScrollViewer>
                 </Border>
-            </Grid>
-            <FlowDocumentScrollViewer Grid.Row="2" Name="mLangDocScroll" Grid.Column="1" HorizontalScrollBarVisibility="Hidden" BorderBrush="LightGray" BorderThickness="1">
-                <FlowDocument Name="mLangDoc" PagePadding="20"/>
-            </FlowDocumentScrollViewer>
+            </DockPanel>
+            <Border Grid.Row="2" BorderBrush="Gray" BorderThickness="1" Margin="0,0,4,0" Background="LightGray">
+                <FlowDocumentScrollViewer Name="mLangDocScroll" HorizontalScrollBarVisibility="Hidden">
+                    <FlowDocument Name="mLangDoc" PagePadding="20"/>
+                </FlowDocumentScrollViewer>
+            </Border>
             <DockPanel Grid.Row="3">
                 <Label Name="mHyperLink" Foreground="Red" FontSize="16" DockPanel.Dock="Left" MouseDown="OnHyperLinkClicked" />
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
-                    <Button x:Name="mClean" Content="Force Clean" Height="25" Margin="4" Click="OnClickClean"/>
-                    <Button x:Name="mRestore" Content="Restore Changes" Height="25" Margin="4" Click="OnClickRestore"/>
-                    <Button x:Name="mReload" Content="Reload" Height="25" Margin="4" Click="OnClickReload"/>
+                    <Button x:Name="mClean" Content="Force Clean" Margin="4" Click="OnClickClean"/>
+                    <Button x:Name="mRestore" Content="Restore Changes" Margin="4" Click="OnClickRestore"/>
+                    <Button x:Name="mReload" Content="Reload" Margin="4" Click="OnClickReload"/>
                 </StackPanel>
             </DockPanel>
         </Grid>
