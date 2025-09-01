@@ -140,6 +140,7 @@ public partial class MainWindow : Window {
    }
 
    Error SetRep (bool source, string folderPath) {
+      if (!Directory.Exists (folderPath)) return SelectedFolderIsNotARepository;
       folderPath = Path.TrimEndingDirectorySeparator (folderPath).Replace (Path.DirectorySeparatorChar, '/');
       if (Directory.GetDirectories (folderPath, ".git", SearchOption.TopDirectoryOnly).Length == 0) return SelectedFolderIsNotARepository;
       var results = RunHiddenCommandLineApp ("git.exe", $"branch", out _, workingdir: folderPath);
